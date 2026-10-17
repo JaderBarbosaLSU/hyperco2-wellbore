@@ -15,8 +15,8 @@
 \newcommand{\mdot}{\dot{m}}
 
 \title{A Godunov-Type Finite-Volume Model for the Transient Blowdown of a
-Pressurized Vertical Well:\\ Formulation, Verification, and Baseline
-Nitrogen Results}
+Pressurized Vertical Well with Conjugate Completion--Formation Heat
+Transfer:\\ Formulation, Verification, and Baseline Nitrogen Results}
 
 \author{Jader R. Barbosa, Jr.\thanks{Craft \& Hawkins Department of
 Petroleum Engineering, Louisiana State University, Baton Rouge, LA.}}
@@ -46,9 +46,22 @@ discharge sequence. Verification comprises exact shock-tube solutions,
 conservation audits, the quasi-static lumped-vessel limit, and grid,
 time-step, and boundary-condition sensitivity studies. Baseline results are
 presented for the adiabatic blowdown of a \SI{2000}{ft} nitrogen-filled
-well from \SI{13.79}{\mega\pascal}. The thermodynamic-property model is
-isolated behind an interface so that real-fluid CO$_2$ properties can
-replace the ideal-gas closure without modification of the flow solver.
+well from \SI{13.79}{\mega\pascal}. The model is then extended with a
+conjugate completion--formation heat-transfer formulation: at every axial
+cell, an implicitly advanced radial thermal network represents the
+concentric completion of the LSU CO$_2$ research well --- 7-5/8\,in CRA
+inner casing, air-filled annulus (natural convection and radiation),
+13-3/8\,in and 20\,in cemented casings --- and the surrounding formation
+with an undisturbed geothermal far field. The network is verified against
+analytical limits and an independent reference solution for transient
+radial conduction. For the baseline slow blowdown of the actual well
+geometry, heat ingress from the completion and formation nearly
+suppresses the expansion cooling (minimum wellhead temperature
+\SI{284}{K} against \SI{124}{K} for the adiabatic wall), with the air
+annulus identified as the dominant solid-side thermal resistance. The
+thermodynamic-property model is isolated behind an interface so that
+real-fluid CO$_2$ properties can replace the ideal-gas closure without
+modification of the flow solver.
 \end{abstract}
 
 %=============================================================
@@ -172,14 +185,15 @@ this class without modification of the flow solver.
 \subsection{Thermal boundary hierarchy}
 
 The wall heat flux $q_w''$ is supplied by an interchangeable thermal
-model: (1)~adiabatic wall, $q_w''=0$ (baseline, this document);
+model: (1)~adiabatic wall, $q_w''=0$ (fluid-dynamic baseline);
 (2)~prescribed wall temperature with convective coupling,
 $q_w'' = h\,(T_w - T)$, $h$ from the Dittus--Boelter correlation
 (simplified benchmark); (3)~prescribed or externally computed heat flux;
 and (4)~the target formulation, conjugate coupling to transient radial
-conduction through tubing, casing, cement, and formation, with
-$q'' = -k_f\,(\partial T_f/\partial r)\big|_{r_w}$ at the wellbore wall.
-Stages 3--4 are the subject of the next phase.
+conduction through the completion layers and the formation, with
+$q'' = -k_f\,(\partial T_f/\partial r)\big|_{r_w}$ emerging from the
+coupled solution. Level~(4) is formulated and verified in
+\cref{sec:thermal} for the completion of the LSU CO$_2$ research well.
 
 %=============================================================
 \section{Numerical method}
@@ -457,6 +471,182 @@ temperature during the baseline blowdown.}
 \end{figure}
 
 %=============================================================
+\section{Conjugate completion--formation heat transfer}
+%=============================================================
+\label{sec:thermal}
+
+\subsection{Radial thermal network}
+
+The conjugate model attaches to every axial cell $j$ a one-dimensional
+radial thermal network representing the concentric completion of the LSU
+CO$_2$ research well over its upper \SI{2000}{ft}
+(\cref{tab:stack}). Only the 7-5/8\,in inner casing contains the
+pressurized fluid; the annulus between the 7-5/8\,in and 13-3/8\,in
+casings is air-filled, and the outer annuli are cemented to surface. The
+30\,in conductor (upper $\sim$\SI{150}{ft} only) is neglected.
+
+\begin{table}[htb]
+\centering
+\caption{Radial stack (upper \SI{2000}{ft}; radii from the casing table
+and API wall thicknesses: 7-5/8\,in 35.8\,lb/ft, 13-3/8\,in 72\,lb/ft,
+20\,in 133\,lb/ft; 26\,in borehole). All properties are parameters.}
+\label{tab:stack}
+\begin{tabular}{llll}
+\toprule
+Region & $r_{\mathrm{in}} \to r_{\mathrm{out}}$ [mm] & Model & $k$ [\si{W/(m.K)}]\\
+\midrule
+Fluid bore & $0 \to 85.2$ & 1-D flow; Dittus--Boelter $h$ & ---\\
+7-5/8\,in CRA casing & $85.2 \to 96.8$ & capacitive shell & 19\\
+Air annulus & $96.8 \to 156.8$ & nonlinear conductance & Eq.~\eqref{eq:keff}\\
+13-3/8\,in casing & $156.8 \to 169.9$ & capacitive shell & 45\\
+Cement & $169.9 \to 237.9$ & capacitive shells & 0.9\\
+20\,in casing & $237.9 \to 254.0$ & capacitive shell & 45\\
+Cement & $254.0 \to 330.2$ & capacitive shells & 0.9\\
+Formation & $330.2 \to 5000$ & 16 log-spaced shells & 2.1\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each solid shell $i$ carries the capacitance per unit length
+$C_i' = \rho_i c_{p,i}\,\pi\,(r_{\mathrm{out},i}^2 -
+r_{\mathrm{in},i}^2)$, lumped at the logarithmic-mean radius, and
+adjacent shells are connected by cylindrical-shell conduction
+resistances $R' = \ln(r_b/r_a)/(2\pi k)$. The network solves
+\begin{equation}
+C_i'\,\frac{dT_i}{dt} =
+ G_{i-1/2}'\,(T_{i-1} - T_i) + G_{i+1/2}'\,(T_{i+1} - T_i),
+\label{eq:network}
+\end{equation}
+with the fluid coupling at the innermost node through the series
+conductance of the convective film and the inner half-shell,
+$G_f' = \left[\,1/(2\pi r_1 h) + R'_{\mathrm{half}}\,\right]^{-1}$, $h$
+from Dittus--Boelter with a laminar floor ($\mathrm{Nu} \ge 3.66$), and
+the outer boundary held at the undisturbed geothermal temperature
+$T_{\mathrm{geo}}(z) = T_s + \Gamma\,(L - z)$ (defaults \SI{294.3}{K},
+\SI{25.5}{K/km}). For blowdown time scales the rock penetration depth
+$\sqrt{\alpha t}$ is of order centimeters, so the far-field radius of
+\SI{5}{m} is generous.
+
+\paragraph{Air annulus.} The gas-filled annulus is treated as a massless
+nonlinear conductance following the standard wellbore treatment of
+\citet{willhite1967}: natural convection through an effective
+conductivity from the Dropkin--Somerscales correlation,
+\begin{equation}
+k_{\mathrm{eff}} = \max\!\left[\,k_{\mathrm{air}},\;
+0.049\,(\mathrm{Gr}\,\mathrm{Pr})^{1/3}\,\mathrm{Pr}^{0.074}\,
+k_{\mathrm{air}}\right],
+\qquad
+\mathrm{Gr} = \frac{g\,\beta\,\Delta T\,(r_o - r_i)^3}{\nu^2},
+\label{eq:keff}
+\end{equation}
+in parallel with gray-surface radiation between concentric cylinders
+($\varepsilon = 0.8$ on both surfaces, linearized conductance
+$2\pi r_i\,\sigma F\,(T_i^2 + T_o^2)(T_i + T_o)$ with the standard
+two-surface view factor $F$). The conductance is re-evaluated every time
+step from the current surface temperatures (coefficient lagging), which
+keeps the implicit solve linear.
+
+\subsection{Solution procedure and coupling}
+
+The networks are advanced once per flow time step with backward Euler;
+each axial cell requires one tridiagonal (Thomas) solve, vectorized
+across cells. The fluid temperature enters the solid solve explicitly,
+while the heat flux returned to the wellbore energy equation,
+\begin{equation}
+q_w'' = \frac{G_f'\,\left(T_1^{\,n+1} - T_f\right)}{2\pi r_1},
+\end{equation}
+uses the \emph{implicit} wall temperature through the same conductance.
+The energy delivered by the fluid source term in \cref{eq:energy} is
+therefore exactly the energy absorbed by the network, and the global
+budget of \cref{eq:budget}, extended by the wall-heat integral
+$\int \sum_j q_w'' \pi D\,\Delta z\,dt$, continues to close to machine
+precision in the conjugate case.
+
+\subsection{Verification}
+
+Four tests establish the thermal model (all automated in the regression
+suite):
+\begin{enumerate}
+\item \emph{Steady state:} with constant fluid and far-field
+temperatures, the converged heat flow is identical across every radial
+interface (series-resistance consistency) to $10^{-6}$ relative.
+\item \emph{Energy conservation:} with an insulated outer boundary, the
+heat absorbed from the fluid equals the change of stored network energy
+to $10^{-10}$ (backward Euler is exactly conservative).
+\item \emph{Transient conduction:} a formation-only network driven by a
+constant wall temperature reproduces the constant-temperature-cylinder
+solution to better than \SI{1}{\percent} over
+$\tau = \alpha t/r_w^2 \in [10, 1000]$, where the reference is an
+independent Crank--Nicolson solution on a 6000-node logarithmic-radial
+grid. A methodological finding is recorded here explicitly: three
+convenient references were tried first and all proved inadequate --- the
+leading-order logarithmic asymptote is 8--15\,\% in error over this
+$\tau$ range; Ramey-type dimensionless-temperature correlations
+\citep{ramey1962,hasan1991} address the constant-\emph{flux} boundary
+condition rather than constant temperature; and naive quadrature of the
+exact Carslaw--Jaeger integral \citep{carslaw1959} mis-handles the
+singular $u \to 0$ region of the integrand that dominates at large
+$\tau$. The network initially appeared 3--7\,\% ``in error'' against
+these references; the independent finite-difference solution showed the
+network to be accurate to \SI{0.3}{\percent} and the references to be at
+fault.
+\item \emph{Radial grid convergence} of $q_w''(t)$ under refinement of
+the formation discretization (deviation $<\SI{2}{\percent}$ at 16
+shells against 32).
+\end{enumerate}
+
+\subsection{Results: thermal-model hierarchy}
+
+\Cref{fig:hierarchy} compares the three thermal levels on the actual
+well geometry (bore ID \SI{170.3}{mm}, 12.7\,mm choke, otherwise the
+baseline case) over \SI{1800}{s}. The outcome is not a small correction:
+heat ingress from the completion and formation nearly suppresses the
+expansion cooling. The minimum wellhead fluid temperature is
+\SI{283.6}{K} for the coupled model and \SI{290.2}{K} for the
+prescribed-$T_w$ benchmark, against \SI{124.0}{K} for the adiabatic
+wall. The warmer inventory sustains a higher pressure at equal mass, so
+the heated cases also discharge measurably faster.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{thermal_hierarchy.png}
+\caption{Thermal-model hierarchy on the LSU well geometry (N$_2$,
+\SI{13.79}{\mega\pascal}/\SI{300}{K}, 12.7\,mm choke): wellhead fluid
+temperature, mass flow rate, and inventory for the adiabatic,
+prescribed-$T_w$, and coupled formulations.}
+\label{fig:hierarchy}
+\end{figure}
+
+\Cref{fig:radial} locates the controlling resistances: of the total
+fluid-to-formation temperature difference, roughly \SI{3}{K} falls
+across the convective film, \SI{7}{K} across the air annulus, and less
+than \SI{1}{K} across all remaining solids; the formation beyond the
+cement is essentially undisturbed after \SI{30}{min}. Two consequences
+follow. First, the air-annulus closure --- here the
+Willhite/Dropkin--Somerscales treatment, developed for modest gap aspect
+ratios --- is a leading-order sensitivity of the model and merits a
+dedicated assessment if annulus conditions (fluid, pressure,
+emissivities) change. Second, the near-isothermal outcome is specific to
+this slow ($\sim$10\,min) discharge; larger chokes shorten the residence
+time relative to the thermal response and shift the behavior back toward
+the adiabatic limit.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.8\textwidth]{thermal_radial.png}
+\caption{Radial temperature through the completion and formation at
+$t = \SI{1800}{s}$ at three depths (coupled model). The dominant
+solid-side temperature drop occurs across the air annulus.}
+\label{fig:radial}
+\end{figure}
+
+\paragraph{Limitations.} The bore is modeled as a clean circle at the
+7-5/8\,in ID; the 2-7/8\,in tubing, injection line, and gauge carriers
+inside the casing are not yet represented hydraulically or thermally.
+Axial conduction in the solids is neglected. Fluid-side transport
+properties are constant (to be revisited for transcritical CO$_2$).
+
+%=============================================================
 \section{Conclusions and outlook}
 %=============================================================
 \label{sec:outlook}
@@ -472,14 +662,29 @@ exhibits the expected physics: a weak descending expansion wave and
 reverberation, quasi-static discharge, and strong expansion cooling that
 reaches the nitrogen critical temperature at the end of the transient.
 
+The conjugate completion--formation thermal model closes the preferred
+level of the thermal hierarchy: an implicitly advanced radial network of
+the actual LSU well completion, verified against analytical limits and
+an independent transient-conduction reference, coupled to the wellbore
+energy equation with exact discrete energy exchange. Its first
+application overturns the adiabatic intuition for this facility: for
+the baseline slow blowdown, heat supplied by the casing, cement, and
+near-well formation holds the wellhead fluid within $\sim$\SI{16}{K} of
+the geothermal state (minimum \SI{284}{K} against \SI{124}{K}
+adiabatic), with the air-filled 7-5/8\,in~$\times$~13-3/8\,in annulus
+as the dominant solid-side resistance. The practical corollary is that
+the severity of blowdown cooling at this facility is controlled by the
+choke size (residence time) and by the annulus condition --- both
+operationally accessible parameters.
+
 The next stages, in order of priority: (i)~real-fluid CO$_2$
 thermodynamics behind the existing property interface (single-phase
-gaseous, then dense/transcritical), for which the end-of-blowdown
-temperatures computed here already demonstrate the inadequacy of the
-ideal-gas closure; (ii)~conjugate transient heat transfer, coupling the
-wellbore energy equation to radial conduction through completion layers
-and formation; and (iii)~phase appearance and two-phase CO$_2$ flow,
-building on the two-phase benchmark heritage of the framework.
+gaseous, then dense/transcritical), where the competition between
+Joule--Thomson cooling and formation heat ingress --- now resolvable
+with the verified conjugate model --- is the physically interesting
+question for facility blowdown tests; and (ii)~phase appearance and
+two-phase CO$_2$ flow, building on the two-phase benchmark heritage of
+the framework.
 
 \section*{Code and data availability}
 The implementation, verification scripts, and notebooks are maintained at
