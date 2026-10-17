@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyperbolic1d"
+version = "0.1.0"
+description = "Transient compressible-flow solvers for hyperbolic PDEs: SCMM (Gessner 2010) reconstruction and Godunov-type finite-volume methods, toward CO2 wellbore blowdown simulation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.7"]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

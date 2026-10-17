@@ -1,0 +1,25 @@
+1.D0		L		!comprimento da tubulação
+1.D-1		D		!diâmetro da tubulação
+2.D-4		epsilon		!rugosidade absoluta
+
+1.D0		tmax		!tempo de simulação
+
+1.D-3		dt		!incremento de tempo
+1.D-2		dz		!incremento de comprimento da malha grosseira
+
+1.D-3		convP		!convergência da pressão (máxima variação admissível)
+1.D-7		convU		!convergência da velocidade (máxima variação admissível)
+1.D-4		convS		!convergência da entropia (máxima variação admissível)
+1.D-3		convG		!convergência do fluxo de massa na entrada (máxima variação admissível)
+100		contPmax	!número máximo de vezes que o GBAND é chamado no loop interno
+10		contSmax	!número máximo de vezes que o GBAND é chamado no loop externo
+
+2		NV		!número de variáveis resolvidas via GBAND no loop interno
+1		NVs		!número de variáveis resolvidas via GBAND no loop externo
+
+16.D0		PM		!peso molecular do fluido
+1.D3		CP		!calor específico a pressão constante
+1.D-5		VISC		!viscosidade do fluido
+5.D5		Pini		!pressão inicial
+300.D0		Tini		!temperatura inicial
+5.D5		Pout		!pressão na saída
