@@ -1,0 +1,26 @@
+{
+  "adiabatic": {
+    "T_wellhead_min_K": 124.0366447887444,
+    "T_wellhead_end_K": 124.0366447887444,
+    "mass_end_kg": 250.60352912682777,
+    "mass_balance_error": -8.666536062796097e-15,
+    "energy_balance_error": 1.2281561015517901e-15,
+    "wall_time_s": 125.1
+  },
+  "prescribed T_w (geothermal)": {
+    "T_wellhead_min_K": 290.1672629941684,
+    "T_wellhead_end_K": 292.9938860832628,
+    "mass_end_kg": 136.9548158706512,
+    "mass_balance_error": 2.071513497936628e-14,
+    "energy_balance_error": 7.675975634698688e-15,
+    "wall_time_s": 162.7
+  },
+  "coupled formation model": {
+    "T_wellhead_min_K": 283.5513307867463,
+    "T_wellhead_end_K": 286.2352352765693,
+    "mass_end_kg": 142.2805031762852,
+    "mass_balance_error": 2.747926068691445e-15,
+    "energy_balance_error": 3.6292012800855396e-14,
+    "wall_time_s": 322.2
+  }
+}

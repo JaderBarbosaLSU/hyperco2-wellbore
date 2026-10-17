@@ -266,7 +266,7 @@ class WellboreModel:
         return zc, V
 
     # ------------------------------------------------------------------
-    def _sources(self, V, zc, t):
+    def _sources(self, V, zc, t, qw=None):
         rho = V[:, 0]
         u = V[:, 1] / rho
         e = V[:, 2] / rho - 0.5 * u * u
@@ -284,7 +284,9 @@ class WellboreModel:
             Re = rho * np.abs(u) * D / self.mu
             fD = darcy_friction_factor(Re, self.geometry.roughness / D)
             S[:, 1] += -fD * rho * u * np.abs(u) / (2.0 * D)
-        qw = self.wall_model.heat_flux(zc, t, T, rho, u, p, self.geometry, self.eos)
+        if qw is None:
+            qw = self.wall_model.heat_flux(zc, t, T, rho, u, p,
+                                           self.geometry, self.eos)
         S[:, 2] += 4.0 * qw / self.geometry.diameter
         return S
 
@@ -316,6 +318,8 @@ class WellboreModel:
         etot0 = float(np.sum(V[:, 2]) * dz * A) + pe(V)
         mdot_int = 0.0           # integral of mdot dt
         hflux_int = 0.0          # integral of mdot * (h0 + g z_top) dt
+        q_int = 0.0              # integral of wall heat input [J]
+        conjugate = hasattr(self.wall_model, "advance")
         t_hist, mdot_hist, mass_hist, pwh_hist, Twh_hist, chk_hist = \
             [], [], [], [], [], []
 
@@ -341,6 +345,16 @@ class WellboreModel:
 
             dt = self.cfl * dz / np.max(np.abs(u) + a)
             dt = min(dt, t_end - t)
+
+            # wall heat flux: one evaluation per step. Conjugate models
+            # advance their internal radial networks here; stateless
+            # models are evaluated on the current fields.
+            if conjugate:
+                qw = self.wall_model.advance(zc, t, dt, T, rho, u, p,
+                                             self.geometry, self.eos)
+            else:
+                qw = self.wall_model.heat_flux(zc, t, T, rho, u, p,
+                                               self.geometry, self.eos)
 
             # ghosts: mirror at bottom (solid wall), zero-gradient at top
             # (the top face flux is overridden by the choke BC anyway)
@@ -386,10 +400,11 @@ class WellboreModel:
             if self.gravity:
                 Vstar[:, 2] += -G_EARTH * dt * 0.5 * (Fi[0:n, 0] + Fi[1:n + 1, 0])
 
-            # Heun corrector for the remaining sources
-            S0 = self._sources(V, zc, t)
-            S1 = self._sources(np.maximum(Vstar, 1e-12), zc, t + dt)
+            # Heun corrector for the remaining sources (fixed qw per step)
+            S0 = self._sources(V, zc, t, qw=qw)
+            S1 = self._sources(np.maximum(Vstar, 1e-12), zc, t + dt, qw=qw)
             V = Vstar + dt * 0.5 * (S0 + S1)
+            q_int += dt * float(np.sum(qw)) * np.pi * self.geometry.diameter * dz
 
             # budgets
             h0_f = eos.enthalpy(p_f, rho_f) + 0.5 * u_f**2
@@ -420,9 +435,10 @@ class WellboreModel:
         mass_end = float(np.sum(V[:, 0]) * dz * A)
         etot_end = float(np.sum(V[:, 2]) * dz * A) + pe(V)
         mass_err = (mass_end + mdot_int - mass0) / mass0
-        # adiabatic budget: E(t) + integral of mdot*(h0 + g z_top) = E(0)
-        adiabatic = isinstance(self.wall_model, AdiabaticWall) and not self.friction
-        energy_err = (etot_end + hflux_int - etot0) / abs(etot0) if adiabatic else np.nan
+        # energy budget: E(t) + PE(t) + enthalpy outflux - wall heat input
+        # = const. Friction does not enter the total-energy equation, so
+        # the budget holds with friction active as well.
+        energy_err = (etot_end + hflux_int - etot0 - q_int) / abs(etot0)
 
         return BlowdownResult(
             z=zc, snap_times=snap_times[:snap_done],

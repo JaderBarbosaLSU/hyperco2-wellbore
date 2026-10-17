@@ -186,6 +186,11 @@ class GodunovResult:
     mass_final: float = 0.0
     energy_initial: float = 0.0
     energy_final: float = 0.0
+    snap_times: np.ndarray | None = None     # set when n_snapshots > 0
+    snap_rho: np.ndarray | None = None       # (n_snap, n_cells)
+    snap_u: np.ndarray | None = None
+    snap_p: np.ndarray | None = None
+    snap_T: np.ndarray | None = None
 
 
 def solve_godunov_shock_tube(
@@ -203,6 +208,7 @@ def solve_godunov_shock_tube(
     flux: Literal["hllc", "hll", "exact"] = "hllc",
     reconstruction: Literal["constant", "muscl"] = "constant",
     limiter: Literal["minmod", "vanleer"] = "vanleer",
+    n_snapshots: int = 0,
 ) -> GodunovResult:
     """Finite-volume solution of the closed shock tube.
 
@@ -227,6 +233,21 @@ def solve_godunov_shock_tube(
     flux_fn = _FLUXES[flux]
     t = 0.0
     n_steps = 0
+    snap_times = np.linspace(0.0, t_end, n_snapshots) if n_snapshots else np.array([])
+    snaps = {"rho": [], "u": [], "p": [], "T": []}
+    snap_done = 0
+
+    def _record():
+        r, uu, pp = _cons_to_prim(V, g)
+        snaps["rho"].append(r.copy())
+        snaps["u"].append(uu.copy())
+        snaps["p"].append(pp.copy())
+        snaps["T"].append(pp / (gas.R * r))
+
+    if snap_times.size and snap_times[0] <= 1e-15:
+        _record()
+        snap_done = 1
+
     t0 = _time.perf_counter()
 
     while t < t_end - 1e-15:
@@ -281,6 +302,9 @@ def solve_godunov_shock_tube(
         V = V - dt / dx * (Fi[1 : n_cells + 1] - Fi[0:n_cells])
         t += dt
         n_steps += 1
+        while snap_done < snap_times.size and t >= snap_times[snap_done] - 1e-15:
+            _record()
+            snap_done += 1
 
     wall = _time.perf_counter() - t0
     rho, u, p = _cons_to_prim(V, g)
@@ -290,4 +314,9 @@ def solve_godunov_shock_tube(
         n_steps=n_steps, wall_time=wall, scheme=scheme,
         mass_initial=mass0, mass_final=float(np.sum(V[:, 0]) * dx),
         energy_initial=energy0, energy_final=float(np.sum(V[:, 2]) * dx),
+        snap_times=snap_times[:snap_done] if snap_times.size else None,
+        snap_rho=np.array(snaps["rho"]) if snaps["rho"] else None,
+        snap_u=np.array(snaps["u"]) if snaps["u"] else None,
+        snap_p=np.array(snaps["p"]) if snaps["p"] else None,
+        snap_T=np.array(snaps["T"]) if snaps["T"] else None,
     )

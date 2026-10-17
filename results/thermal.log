@@ -1,0 +1,7 @@
+[run] adiabatic
+    T_wh min=124.0 K, end=124.0 K; budgets m=-8.7e-15 E=1.2e-15; 125s
+[run] prescribed T_w (geothermal)
+    T_wh min=290.2 K, end=293.0 K; budgets m=2.1e-14 E=7.7e-15; 163s
+[run] coupled formation model
+    T_wh min=283.6 K, end=286.2 K; budgets m=2.7e-15 E=3.6e-14; 322s
+done
