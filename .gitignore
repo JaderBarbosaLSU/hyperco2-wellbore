@@ -4,3 +4,12 @@ __pycache__/
 results/*.npz
 results/benchmark.log
 nohup.out
+results/*.gif
+paper/main.aux
+paper/main.bbl
+paper/main.blg
+paper/main.log
+paper/main.out
+paper/main.fls
+paper/main.fdb_latexmk
+paper/build.log
