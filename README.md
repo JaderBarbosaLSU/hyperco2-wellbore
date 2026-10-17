@@ -44,7 +44,7 @@ results/                generated benchmark outputs
 ## Quick start (Colab or local)
 
 ```bash
-pip install "hyperbolic1d[plot] @ git+https://github.com/USER/REPO"
+pip install "hyperbolic1d[plot] @ git+https://github.com/JaderBarbosaLSU/hyperco2-wellbore"
 ```
 
 ```python
