@@ -32,6 +32,9 @@ src/hyperbolic1d/       solver package
   exact_riemann.py      exact Riemann solver (validation reference)
   scmm.py               SCMM reconstruction (Gessner 2010, Ch. 3)
   godunov.py            finite-volume Godunov/HLLC/MUSCL solvers
+  eos.py                EOS interface (ideal gas now; real-fluid CO2 later)
+  wellbore.py           Phase-3 wellbore blowdown model (gravity, friction,
+                        choke BC, wall thermal-model interface)
   benchmarks.py         benchmark cases + error metrics (thesis Table 3.3)
 scripts/                benchmark drivers
 notebooks/              Colab-ready notebooks

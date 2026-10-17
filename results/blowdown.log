@@ -1,0 +1,19 @@
+[1] 0-D vessel comparison (gravity off)
+    max rel err: p=8.723e-03, mdot=7.568e-03; budgets: m=1.8e-15, E=-3.8e-15
+[2] grid independence
+    n=100: 4308 steps, 1.4s
+    n=200: 8621 steps, 3.0s
+    n=400: 17248 steps, 6.4s
+    n=800: 34504 steps, 17.6s
+    max rel dev vs n=800: {100: 0.0260711638523413, 200: 0.008780192975905442, 400: 0.0026340492791472997}
+[3] CFL sensitivity
+    max rel dev vs CFL=0.9: {0.5: 0.005896529577124899, 0.2: 0.01215344031110713}
+[4] choke sweep
+    1/4 in: mdot(0+)=0.84 kg/s, mass err=-3.1e-16
+    1/2 in: mdot(0+)=3.32 kg/s, mass err=-1.5e-16
+    1 in: mdot(0+)=12.92 kg/s, mass err=9.2e-16
+    2 in: mdot(0+)=46.61 kg/s, mass err=1.1e-15
+    open pipe: mdot(0+)=143.22 kg/s, mass err=-1.8e-15
+[5] demonstration run (gravity on, full blowdown)
+    141269 steps, 55s wall; T_wh min=126.9 K; budgets m=2.9e-15 E=-7.1e-16
+done
