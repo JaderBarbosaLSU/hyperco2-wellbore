@@ -1,0 +1,9 @@
+[1] main conjugate run (friction on, 1800 s, sensors)
+    388615 steps, 312s; budgets m=1.8e-14 E=1.8e-14
+[2] early-time run (acoustic phase)
+[3] CSV export
+    -> /home/claude/hyperco2/results/export
+[4] publication figures
+    4 figures written
+[5] animations
+done

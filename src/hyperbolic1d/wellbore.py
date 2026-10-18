@@ -228,6 +228,11 @@ class BlowdownResult:
     p_wellhead: np.ndarray
     T_wellhead: np.ndarray
     choked: np.ndarray
+    u_wellhead_face: np.ndarray | None = None   # choke face velocity
+    sensor_t: np.ndarray | None = None
+    sensor_data: dict | None = None             # name -> T(t) array
+    sensor_fluid_extra: dict | None = None      # name -> {p, rho, u}
+    sensor_meta: dict | None = None
     energy_balance_error: float = np.nan
     mass_balance_error: float = np.nan
     n_steps: int = 0
@@ -295,6 +300,7 @@ class WellboreModel:
               init: Literal["uniform", "hydrostatic"] = "uniform",
               n_snapshots: int = 9,
               hist_stride: int = 20,
+              sensors=None,
               progress: Callable[[float, float], None] | None = None,
               ) -> BlowdownResult:
         eos = self.eos
@@ -322,6 +328,9 @@ class WellboreModel:
         conjugate = hasattr(self.wall_model, "advance")
         t_hist, mdot_hist, mass_hist, pwh_hist, Twh_hist, chk_hist = \
             [], [], [], [], [], []
+        uf_hist = []
+        if sensors is not None:
+            sensors.bind(zc, L, self.wall_model)
 
         # record the initial state as the first snapshot
         if snap_times.size and snap_times[0] <= 1e-12:
@@ -420,6 +429,9 @@ class WellboreModel:
                 pwh_hist.append(p[-1])
                 Twh_hist.append(T[-1])
                 chk_hist.append(choked)
+                uf_hist.append(u_f)
+                if sensors is not None:
+                    sensors.sample(T, rho, u, p)
                 if progress is not None:
                     progress(t, t_end)
             while snap_done < snap_times.size and t >= snap_times[snap_done] - 1e-12:
@@ -440,6 +452,11 @@ class WellboreModel:
         # the budget holds with friction active as well.
         energy_err = (etot_end + hflux_int - etot0 - q_int) / abs(etot0)
 
+        sensor_t = sensor_data = sensor_extra = sensor_meta = None
+        if sensors is not None:
+            sensor_data, sensor_extra, sensor_meta = sensors.finalize()
+            sensor_t = np.array(t_hist)
+
         return BlowdownResult(
             z=zc, snap_times=snap_times[:snap_done],
             p=np.array(snaps["p"]), T=np.array(snaps["T"]),
@@ -447,6 +464,9 @@ class WellboreModel:
             t_hist=np.array(t_hist), mdot=np.array(mdot_hist),
             mass=np.array(mass_hist), p_wellhead=np.array(pwh_hist),
             T_wellhead=np.array(Twh_hist), choked=np.array(chk_hist),
+            u_wellhead_face=np.array(uf_hist),
+            sensor_t=sensor_t, sensor_data=sensor_data,
+            sensor_fluid_extra=sensor_extra, sensor_meta=sensor_meta,
             mass_balance_error=mass_err, energy_balance_error=energy_err,
             n_steps=step, wall_time=wall,
         )

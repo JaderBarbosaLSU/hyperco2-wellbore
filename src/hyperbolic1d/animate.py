@@ -24,7 +24,7 @@ def animate_blowdown(result, filename: str, fps: int = 25,
                      title: str = "", mdot_inset: bool = True,
                      dpi: int = 110, time_label: str = "t = {t:.2f} s",
                      p_ref=None, p_label: str = "Pressure [MPa]",
-                     p_scale: float = 1e-6):
+                     p_scale: float = 1e-6, sensor_depths=None):
     """Render an animation from a BlowdownResult with dense snapshots.
 
     ``result`` must have been produced with a large ``n_snapshots`` (one
@@ -59,6 +59,11 @@ def animate_blowdown(result, filename: str, fps: int = 25,
         ax.set_xlabel("z [m]  (0 = bottom)")
         ax.set_ylabel(lab)
         ax.grid(alpha=0.3)
+        if sensor_depths is not None:
+            L_well = z[-1] + (z[1] - z[0]) / 2
+            for sd in sensor_depths:
+                ax.axvline(L_well - sd, color="crimson", lw=0.6,
+                           ls=(0, (2, 2)), alpha=0.7)
         lines[key] = (ln, data)
 
     ttxt = axp.set_title(time_label.format(t=0.0), loc="left", fontsize=10)
@@ -119,3 +124,91 @@ def xt_diagram(result, filename: str | None = None, field: str = "p",
         plt.close(fig)
         return filename
     return fig, ax
+
+
+def animate_temperature(result, filename: str, fps: int = 25, dpi: int = 110,
+                        title: str = "", time_label: str = "t = {t:.0f} s"):
+    """Temperature-focused animation with fiber-optic sensor overlay.
+
+    Left panel: fluid temperature profile T(z) with the sensor stations
+    marked; sensor markers show the *sampled* temperatures (fluid dots,
+    external-fiber squares), so the relation between the continuous field
+    and the discrete measurements is immediate. Right panel: sensor T(t)
+    traces with a moving time cursor.
+
+    Requires a result produced with ``sensors=`` (sensor_data populated).
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation
+
+    if not getattr(result, "sensor_data", None):
+        raise ValueError("result has no sensor data; run solve(sensors=...)")
+
+    z = result.z
+    L = z[-1] + (z[1] - z[0]) / 2
+    meta = result.sensor_meta
+    names = list(result.sensor_data)
+    fluid_names = [n for n in names if meta[n]["location"] == "fluid"]
+    solid_names = [n for n in names if meta[n]["location"] != "fluid"]
+
+    fig, (axp, axt) = plt.subplots(1, 2, figsize=(12, 5),
+                                   gridspec_kw={"width_ratios": [1, 1.2]})
+    (lnT,) = axp.plot(z, result.T[0], "k-", lw=1.4, label="fluid $T(z)$")
+    fl_pts, = axp.plot([], [], "o", color="tab:red", ms=5,
+                       label="fluid fiber samples")
+    so_pts, = axp.plot([], [], "s", color="tab:blue", ms=5,
+                       label='13-3/8" external fiber')
+    allT = result.T
+    pad = 0.05 * (allT.max() - allT.min() + 1e-9)
+    axp.set_ylim(min(allT.min(), min(v.min() for v in
+                 result.sensor_data.values())) - pad, allT.max() + pad)
+    axp.set_xlim(z[0], z[-1])
+    axp.set_xlabel("z [m]  (0 = bottom)")
+    axp.set_ylabel("Temperature [K]")
+    axp.grid(alpha=0.3)
+    axp.legend(fontsize=8, loc="lower left")
+
+    cmap_f = plt.cm.autumn
+    cmap_s = plt.cm.winter
+    ts = result.sensor_t
+    for i, n in enumerate(sorted(fluid_names, key=lambda n: meta[n]["depth"])):
+        axt.plot(ts, result.sensor_data[n],
+                 color=cmap_f(i / max(len(fluid_names) - 1, 1)), lw=1.0,
+                 label=f"fluid {meta[n]['depth']/0.3048:.0f} ft")
+    for i, n in enumerate(sorted(solid_names, key=lambda n: meta[n]["depth"])):
+        axt.plot(ts, result.sensor_data[n],
+                 color=cmap_s(i / max(len(solid_names) - 1, 1)), lw=1.0,
+                 ls="--", label=f"fiber {meta[n]['depth']/0.3048:.0f} ft")
+    cursor = axt.axvline(0.0, color="k", lw=0.8)
+    axt.set_xlabel("t [s]")
+    axt.set_ylabel("Sensor temperature [K]")
+    axt.grid(alpha=0.3)
+    axt.legend(fontsize=6.5, ncol=2)
+    ttl = axp.set_title(time_label.format(t=0.0), loc="left", fontsize=10)
+    if title:
+        fig.suptitle(title)
+    fig.tight_layout()
+
+    def update(i):
+        t = result.snap_times[i]
+        lnT.set_ydata(result.T[i])
+        j = min(np.searchsorted(ts, t), ts.size - 1)
+        fl_z = [L - meta[n]["depth"] for n in fluid_names]
+        fl_T = [result.sensor_data[n][j] for n in fluid_names]
+        so_z = [L - meta[n]["depth"] for n in solid_names]
+        so_T = [result.sensor_data[n][j] for n in solid_names]
+        fl_pts.set_data(fl_z, fl_T)
+        so_pts.set_data(so_z, so_T)
+        cursor.set_xdata([ts[j], ts[j]])
+        ttl.set_text(time_label.format(t=t))
+        return []
+
+    anim = FuncAnimation(fig, update, frames=len(result.snap_times),
+                         blit=False)
+    writer = "ffmpeg" if filename.endswith(".mp4") else "pillow"
+    anim.save(filename, fps=fps, dpi=dpi, writer=writer)
+    plt.close(fig)
+    return filename
