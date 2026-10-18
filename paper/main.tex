@@ -13,96 +13,117 @@
 
 \newcommand{\pd}[2]{\frac{\partial #1}{\partial #2}}
 \newcommand{\mdot}{\dot{m}}
+\newcommand{\co}{CO$_2$}
 
-\title{A Godunov-Type Finite-Volume Model for the Transient Blowdown of a
-Pressurized Vertical Well with Conjugate Completion--Formation Heat
-Transfer:\\ Formulation, Verification, and Baseline Nitrogen Results}
+\title{Transient Blowdown of a Pressurized Vertical Well with Real-Fluid
+CO$_2$ Thermodynamics, a Homogeneous-Equilibrium Choke Model, and Conjugate
+Completion--Formation Heat Transfer:\\ Model Formulation, Numerical
+Implementation, Verification, and Results}
 
 \author{Jader R. Barbosa, Jr.\thanks{Craft \& Hawkins Department of
 Petroleum Engineering, Louisiana State University, Baton Rouge, LA.}}
 
-\date{\today\\[1ex]\small Working document --- Phase 3, Stage 1 of the
-HyperCO$_2$ framework}
+\date{\today\\[1ex]\small Technical report --- HyperCO$_2$ framework,
+Phases 3--5}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This document describes the formulation, numerical implementation, and
-verification of a one-dimensional transient compressible-flow model for the
-blowdown of a pressurized vertical well through a wellhead restriction. The
+This report documents, at a level intended to permit independent
+reproduction, a one-dimensional transient compressible-flow model for the
+blowdown of a pressurized vertical well through a wellhead choke. The
 governing mass, momentum, and total-energy equations are solved in
-conservative form with a Godunov-type finite-volume method employing
-MUSCL--Hancock reconstruction and the HLLC approximate Riemann solver, a
-numerical architecture selected on the basis of systematic shock-tube
-benchmarks against the split-coefficient-matrix method (SCMM) used in
-earlier work \citep{gessner2010}. Gravity, wall friction, and fluid--wall
-heat transfer enter as source terms; the gravitational work term is
-discretized in an energy-consistent face-flux form that closes the discrete
-total-plus-potential energy budget to machine precision. The wellhead is
-modeled as a choke coupled to the interior solution through the outgoing
-characteristic, yielding a physically consistent choked/unchoked/closed
-discharge sequence. Verification comprises exact shock-tube solutions,
-conservation audits, the quasi-static lumped-vessel limit, and grid,
-time-step, and boundary-condition sensitivity studies. Baseline results are
-presented for the adiabatic blowdown of a \SI{2000}{ft} nitrogen-filled
-well from \SI{13.79}{\mega\pascal}. The model is then extended with a
-conjugate completion--formation heat-transfer formulation: at every axial
-cell, an implicitly advanced radial thermal network represents the
-concentric completion of the LSU CO$_2$ research well --- 7-5/8\,in CRA
-inner casing, air-filled annulus (natural convection and radiation),
-13-3/8\,in and 20\,in cemented casings --- and the surrounding formation
-with an undisturbed geothermal far field. The network is verified against
-analytical limits and an independent reference solution for transient
-radial conduction. For the baseline slow blowdown of the actual well
-geometry, heat ingress from the completion and formation nearly
-suppresses the expansion cooling (minimum wellhead temperature
-\SI{284}{K} against \SI{124}{K} for the adiabatic wall), with the air
-annulus identified as the dominant solid-side thermal resistance. The
-thermodynamic-property model is isolated behind an interface so that
-real-fluid CO$_2$ properties can replace the ideal-gas closure without
-modification of the flow solver.
+conservative form with a Godunov-type finite-volume method
+(MUSCL--Hancock reconstruction, HLLC approximate Riemann solver), an
+architecture selected on the evidence of systematic shock-tube benchmarks
+against the split-coefficient-matrix method of earlier work
+\citep{gessner2010}. Gravity, wall friction, and fluid--wall heat
+transfer enter as source terms; the gravitational work term is
+discretized in an energy-consistent face-flux form that closes the
+discrete total-plus-potential-energy budget to machine precision. The
+thermodynamic closure is isolated behind a property interface
+implemented both by a calorically perfect gas (nitrogen baseline) and by
+the Span--Wagner reference equation of state for \co\ evaluated through
+CoolProp, with a tabulated $(\rho,e)\!\to\!(p,T,a)$ inversion whose
+interpolation error is quantified. The wellhead boundary condition
+couples the interior solution to a quasi-steady choke through the
+outgoing characteristic; for \co\ the choke model is extended to a
+homogeneous-equilibrium (HEM) formulation that admits flashing within
+the restriction while the distributed wellbore flow remains strictly
+single phase, monitored every time step against the saturation boundary
+and halted with a flagged report on any in-wellbore dome entry. Initial
+conditions are hydrostatic and, in the preferred configuration,
+geothermal: $T(\zeta,0)=T_s+\Gamma\zeta$ with a Louisiana-summer surface
+temperature and a Gulf-Coast gradient, applied consistently to the fluid
+column and to the conjugate completion--formation thermal model of the
+LSU \co\ research well. Verification spans exact shock-tube solutions,
+conservation audits, hydrostatic stationarity, grid/CFL studies, the
+lumped-vessel limit, real-fluid property and choke-flow limits, and
+independent transient-conduction references, with errors quantified
+throughout. Results are reported for matched nitrogen and \co\
+blowdowns of the \SI{2000}{ft} well from a \SI{5}{MPa} wellhead state:
+\co\ stores $2.56\times$ the nitrogen mass at matched conditions but
+discharges only $1.40\times$ faster initially; with the uniform
+\SI{300}{K} initial state the choke flashes (HEM throat quality
+$0.95$--$1.0$) and the adiabatic wellbore reaches saturation at the
+bottom within \SI{173}{s}, whereas with the geothermal summer
+initialization and the coupled thermal model the entire system ---
+wellbore and choke throat --- remains single phase for the full
+one-hour transient with a minimum saturation margin of \SI{14.2}{K}.
 \end{abstract}
+
+\tableofcontents
 
 %=============================================================
 \section{Introduction}
 %=============================================================
 
 Transient depressurization (blowdown) of wells and pipelines containing
-compressed gas is a canonical problem in well control, CO$_2$ transport and
+compressed gas is a canonical problem in well control, \co\ transport and
 storage operations, and the repurposing of oil and gas wells for energy
 storage. The rapid opening of a wellhead valve launches an expansion wave
 into the wellbore, followed by a long quasi-static discharge during which
-the contained fluid cools substantially by expansion work. For CO$_2$, the
+the contained fluid cools substantially by expansion work. For \co, the
 associated temperature excursions can cross the saturation locus, with
 consequences for well integrity and metering; a predictive transient model
 is therefore a prerequisite for the design and interpretation of blowdown
-and injection tests.
+and injection tests at facilities such as the LSU \co\ research well.
 
-The present work is the third phase of a numerical framework whose starting
-point was the Fortran implementation of the split coefficient matrix method
-(SCMM) developed in \citet{gessner2010} following
+The present work is the continuation of a numerical framework whose
+starting point was the Fortran implementation of the split coefficient
+matrix method (SCMM) developed in \citet{gessner2010} following
 \citet{chakravarthy1980} and \citet{stadtke2006}, with linear systems
 solved by the banded routine of \citet{aziz1979}. In Phases~1--2 the
-original single-phase SCMM solvers (conservative and non-conservative
-formulations, first- and second-order upwind variants) were reconstructed
-in Python and validated against exact shock-tube solutions, reproducing the
-original error tables; Godunov-type finite-volume (FV) alternatives were
-then evaluated on identical benchmarks. The FV method with MUSCL--Hancock
+original single-phase SCMM solvers were reconstructed in Python and
+validated against exact shock-tube solutions, reproducing the original
+error tables; Godunov-type finite-volume (FV) alternatives were then
+evaluated on identical benchmarks. The FV method with MUSCL--Hancock
 reconstruction \citep{vanleer1984,toro2009} and the HLLC approximate
-Riemann solver \citep{toro1994} proved approximately one order of magnitude
-more accurate than the best original scheme at two orders of magnitude
-lower computational cost, with exact discrete conservation --- properties
-the quasi-linear SCMM discretization cannot provide. That evidence, rather
-than a priori preference, fixed the architecture adopted here.
+Riemann solver \citep{toro1994} proved approximately one order of
+magnitude more accurate than the best original scheme at two orders of
+magnitude lower computational cost, with exact discrete conservation ---
+properties the quasi-linear SCMM discretization cannot provide. That
+evidence, rather than a priori preference, fixed the architecture
+adopted here.
 
-This document records (i)~the mathematical model and its source terms,
-(ii)~the numerical method, including the wellhead choke boundary condition
-and an energy-consistent treatment of gravitational work, (iii)~the
-verification campaign, and (iv)~baseline results for adiabatic nitrogen
-blowdown of a \SI{2000}{ft} well. Planned extensions --- real-fluid CO$_2$
-thermodynamics, and conjugate heat transfer with the completion and
-formation --- are outlined in \cref{sec:outlook}.
+This report consolidates the complete technical documentation of the
+framework through Phase~5: (i)~the mathematical model, its constitutive
+relations and source terms, with the rationale for and limitations of
+every closure; (ii)~the real-fluid \co\ thermodynamic treatment;
+(iii)~the initial conditions, including hydrostatic initialization
+consistent with a geothermal temperature profile; (iv)~every boundary
+condition, including the wellhead choke with its homogeneous-equilibrium
+(HEM) extension for flashing within the restriction; (v)~the conjugate
+completion--formation heat-transfer model with full documentation of the
+empirical correlations employed; (vi)~the numerical method; (vii)~the
+verification and validation campaign with quantified errors; and
+(viii)~results and their physical interpretation for matched nitrogen
+and \co\ blowdowns, including the fiber-optic sensor outputs of the LSU
+well. A reproducibility section (\cref{sec:repro}) tabulates every
+parameter of every reported case. Negative results and model failures
+encountered during development are documented explicitly rather than
+omitted.
 
 %=============================================================
 \section{Problem formulation}
@@ -111,33 +132,38 @@ formation --- are outlined in \cref{sec:outlook}.
 
 A vertical well of depth $L = \SI{609.6}{m}$ (\SI{2000}{ft}) and constant
 circular cross-section (inner diameter $D$, flow area $A = \pi D^2/4$) is
-initially closed and filled with quiescent gas at uniform pressure $p_0$
-and temperature $T_0$. The axial coordinate $z$ is measured upward from
-the closed bottom ($z=0$) to the wellhead ($z=L$). At $t=0$ a choke of
-bore diameter $d_c$ and discharge coefficient $C_d$ at the wellhead is
-opened instantaneously to an external environment at back pressure $p_b$.
-The baseline configuration is summarized in \cref{tab:baseline}.
+initially closed and filled with quiescent gas. The geometry is that of
+the LSU \co\ research well: only the 7-5/8\,in corrosion-resistant-alloy
+(CRA) inner casing contains the pressurized fluid, giving
+$D = \SI{170.3}{mm}$ (35.8\,lb/ft API wall). At $t=0$ a choke of bore
+diameter $d_c = \SI{12.7}{mm}$ and discharge coefficient $C_d$ at the
+wellhead is opened instantaneously to an external environment at back
+pressure $p_b = \SI{101.325}{kPa}$.
 
-\begin{table}[htb]
-\centering
-\caption{Baseline case definition.}
-\label{tab:baseline}
-\begin{tabular}{ll}
-\toprule
-Fluid & N$_2$, ideal gas ($R=\SI{296.8}{J/(kg.K)}$, $\gamma=1.40$)\\
-Well depth $L$ & \SI{609.6}{m} (\SI{2000}{ft})\\
-Well inner diameter $D$ & \SI{0.100}{m}\\
-Initial state & uniform, $p_0=\SI{13.79}{\mega\pascal}$ (\SI{2000}{psi}), $T_0=\SI{300}{K}$, $u=0$\\
-Choke & $d_c = \SI{12.7}{mm}$, $C_d = 0.84$, $p_b = \SI{101.325}{\kilo\pascal}$\\
-Bottom boundary & closed (solid wall)\\
-Walls & adiabatic (baseline); friction neglected (baseline)\\
-\bottomrule
-\end{tabular}
-\end{table}
+\paragraph{Coordinate system and sign conventions.} The axial coordinate
+$z$ is measured \emph{upward} from the closed bottom ($z=0$) to the
+wellhead ($z=L$); velocity $u$ is positive upward (toward the wellhead).
+Depth below the wellhead is denoted $\zeta = L - z$, so that the
+geothermal profile of \cref{sec:ic-temperature} reads
+$T = T_s + \Gamma\,\zeta$ with $\Gamma > 0$. All figures plot depth
+$\zeta$ increasing downward.
 
-The quantities of interest are the axial--temporal fields $p(z,t)$,
-$T(z,t)$, $\rho(z,t)$, $u(z,t)$, the wellhead mass flow rate $\mdot(t)$,
-and the mass inventory $M(t)$.
+Two working fluids are considered on identical geometry, grid, choke,
+and output cadence: nitrogen (ideal gas) as the baseline, and \co\ with
+the full real-fluid treatment of \cref{sec:co2}. Two initial states are
+considered: a hydrostatically initialized isothermal column at
+$T_0=\SI{300}{K}$, and the geothermal summer initialization of
+\cref{sec:ic-temperature}. The wellhead initial pressure is \SI{5}{MPa}
+in the fluid-comparison campaigns --- a deliberate deviation from the
+original nitrogen baseline at \SI{13.79}{MPa}, which is retained
+unchanged in \cref{sec:results-n2}: at \SI{13.79}{MPa} and \SI{300}{K},
+\co\ is a dense liquid-like fluid, not a single-phase gas, so no matched
+gaseous comparison exists at that state. The quantities of interest are
+the fields $p(z,t)$, $T(z,t)$, $\rho(z,t)$, $u(z,t)$, the wellhead mass
+flow rate $\mdot(t)$, the mass inventory $M(t)$, the saturation margin
+field $m(z,t) = T - T_{\mathrm{sat}}(p)$ for \co, and the temperature
+histories at the fiber-optic sensor locations of the LSU well
+(\cref{sec:sensors}).
 
 %=============================================================
 \section{Mathematical model}
@@ -155,320 +181,761 @@ governed by the conservation of mass, momentum, and total energy,
 \pd{E}{t} + \pd{}{z}\!\left[u\left(E + p\right)\right] &=
   -\rho u g \;+\; \frac{4\,q_w''}{D}, \label{eq:energy}
 \end{align}
-where $\rho$ is the density, $u$ the velocity (positive upward), $p$ the
-pressure, $E = \rho\,(e + u^2/2)$ the total energy per unit volume, $e$
-the specific internal energy, $g$ the gravitational acceleration, $f_D$
-the Darcy friction factor, and $q_w''$ the wall heat flux into the fluid.
+with the conservative variables $\mathbf{V} = [\rho,\;\rho u,\;E]^T$,
+the flux vector
+$\mathbf{F} = [\rho u,\;\rho u^2 + p,\;u(E+p)]^T$, and the primitive
+variables $(\rho, u, p)$. Here $E = \rho\,(e + u^2/2)$ is the total
+energy per unit volume, $e$ the specific internal energy, $g$ the
+gravitational acceleration, $f_D$ the Darcy friction factor, and
+$q_w''$ the wall heat flux into the fluid (per unit inner-surface area).
 Wall shear appears only in the momentum equation: a stationary wall
-performs no net work on the fluid, and frictional dissipation is recovered
-automatically by the conservative total-energy formulation. The friction
-factor, when enabled, is evaluated from the all-regime correlation of
-\citet{churchill1977}.
+performs no net work on the fluid, and frictional dissipation is
+recovered automatically by the conservative total-energy formulation ---
+no explicit dissipation source is required or permitted in
+\cref{eq:energy}.
 
-\subsection{Equation of state}
+The one-dimensional (area-averaged) description assumes that radial
+pressure and velocity nonuniformities are negligible, appropriate for
+$L/D \approx 3600$; entrance and fitting losses are not represented
+beyond the distributed friction term.
+
+\subsection{Thermodynamic closure: the property interface}
+\label{sec:interface}
 
 The system is closed by an equation of state supplying
-$(p, T, a) = f(\rho, e)$, where $a$ is the speed of sound. The solver and
-the boundary conditions interact with the fluid exclusively through an
-abstract property interface comprising this closure, the isentrope
-$\rho(p;\,p_{\mathrm{ref}},\rho_{\mathrm{ref}})$, the outgoing-wave
-(Riemann-invariant) velocity relation, and the isentropic-nozzle mass
-flux. For the present stage the interface is implemented by a calorically
+$(p, T, a) = f(\rho, e)$, where $a$ is the speed of sound. The flow
+solver and the boundary conditions interact with the fluid
+\emph{exclusively} through an abstract property interface comprising:
+the closure $(\rho,e)\to(p,T,a)$ and its inverse $(p,T)\to(\rho,e)$;
+the isentrope $\rho(p;\,p_{\mathrm{ref}},\rho_{\mathrm{ref}})$; the
+outgoing-wave (Riemann-invariant) velocity relation
+$u(p;\,p_{\mathrm{ref}},\rho_{\mathrm{ref}},u_{\mathrm{ref}})$; the
+stagnation state from $(p,\rho,u)$; the isentropic-nozzle mass flux
+$G(p_0,T_0,p_b)$; and, for fluids with a vapor dome, the saturation
+margin $m(p,T) = T - T_{\mathrm{sat}}(p)$. This isolation is what
+allowed the real-fluid \co\ implementation to replace the ideal-gas
+closure without modification of the flow solver, and it is the seam at
+which future two-phase closures will attach.
+
+\subsection{Ideal-gas closure (nitrogen)}
+
+For the nitrogen baseline the interface is implemented by a calorically
 perfect gas,
 \begin{equation}
 p = \rho R T, \qquad e = c_v T, \qquad a = \sqrt{\gamma R T},
 \end{equation}
-with nitrogen properties; a real-fluid CO$_2$ implementation of the same
-interface (evaluating the isentrope and invariant numerically) replaces
-this class without modification of the flow solver.
+with $R=\SI{296.8}{J/(kg.K)}$ and $\gamma=1.40$. The isentrope,
+invariant, and orifice flux have their textbook closed forms
+\citep{anderson1982}. The closure is accurate for nitrogen over the
+conditions computed here except at the very end of deep adiabatic
+blowdowns, where the fluid approaches the nitrogen critical temperature
+(\SI{126.2}{K}) and real-gas corrections of several percent would
+apply; this limitation is noted where relevant.
+
+\subsection{Real-fluid CO$_2$ thermodynamics}
+\label{sec:co2}
+
+\subsubsection{Property model and validity range}
+
+\co\ properties derive from the \citet{span1996} reference equation of
+state --- a Helmholtz-energy formulation valid from the triple-point
+temperature (\SI{216.59}{K}) to \SI{1100}{K} at pressures to
+\SI{800}{MPa} --- evaluated through the open-source library CoolProp
+\citep[version 8.0]{bell2014}. Because every quantity ($p$, $T$, $e$,
+$h$, $s$, $c_p$, $c_v$, and the full thermodynamic speed of sound
+$a^2 = (\partial p/\partial\rho)_s$) is obtained from derivatives of
+the \emph{same} Helmholtz function, the property set is thermodynamically
+self-consistent by construction; no auxiliary correlation for $a$ or
+$c_p$ is introduced. Saturation properties
+($T_{\mathrm{sat}}(p)$, $s_{\mathrm{vap}}(p)$) and, where the HEM choke
+requires it, the vapor quality $x$ of flashed states come from the same
+EOS via CoolProp's saturation routines and
+pressure--entropy flash.
+
+\subsubsection{Conversion of conservative variables to primitives}
+\label{sec:tables}
+
+The performance-critical operation is the per-cell closure
+$(\rho, e) \to (p, T, a)$, executed for every cell at every time step
+(and for every reconstructed face pair). Direct CoolProp flash calls at
+this frequency are prohibitively slow (milliseconds per scalar call),
+so the closure is served from precomputed tables on a uniform
+$(\ln\rho, T)$ grid --- by default $512\times512$ nodes spanning
+$\rho \in [0.5, 300]\,\si{kg/m^3}$, $T \in [220, 340]\,\si{K}$, far
+inside the EOS validity envelope. The inversion proceeds in two steps:
+\begin{enumerate}
+\item $T$ is recovered from $(\ln\rho, e)$ by a vectorized Newton
+iteration on the tabulated $e(\ln\rho, T)$, which is strictly monotone
+in $T$ at fixed density for this fluid and range, so the iteration is
+globally convergent from the mid-range initial guess (converged in
+$\le 6$ iterations to $|\Delta T| < \SI{1e-6}{K}$);
+\item $p$ and $a$ follow by bilinear evaluation at $(\ln\rho, T)$.
+\end{enumerate}
+Interpolation is the only consistency loss, and it is quantified by an
+automated test that compares the closure against direct Span--Wagner
+evaluation at random gas-phase states: maximum relative errors
+$5\times10^{-5}$ ($p$), $1\times10^{-5}$ ($T$), and $6\times10^{-6}$
+($a$); mean errors are an order of magnitude smaller. The closure costs
+$\approx\SI{0.5}{ms}$ per 300-cell call. Table nodes that fall inside
+the vapor dome are filled by gas-side extrapolation in $\ln\rho$ purely
+so that dome-grazing lookups remain finite; \emph{model validity near
+the dome is governed by the explicit saturation monitor of
+\cref{sec:monitor}, never by those extrapolated nodes}.
+
+\subsubsection{Numerical difficulties and safeguards near saturation}
+\label{sec:safeguards}
+
+Property inversion near the saturation boundary and the critical point
+is the fragile part of any real-fluid solver, and the failures
+encountered here are documented deliberately:
+\begin{itemize}
+\item \emph{Sound speed is undefined inside the dome} in an equilibrium
+sense, and CoolProp raises an exception when $a$ is requested of a
+two-phase $(p,s)$ state. All isentrope evaluations used by boundary
+physics therefore request only $(\rho, h)$ --- which equilibrium
+flashes do provide --- and never $a$, through a dedicated low-level
+\texttt{AbstractState} path.
+\item \emph{Entropy--quality flashes proved non-robust} over parts of
+the dome in the installed CoolProp version. The dome crossing of an
+isentrope, $p_{\mathrm{dome}}(s)$, is therefore resolved from a
+precomputed 200-node table of the saturated-vapor entropy
+$s_{\mathrm{vap}}(p)$ (monotone; interpolated in $\ln p$), not from an
+S--Q flash.
+\item \emph{Riemann-invariant quadrature.} The outgoing-wave relation
+$u(p) = u_{\mathrm{ref}} + \int_p^{p_{\mathrm{ref}}} dp'/(\rho a)$ is
+integrated along the isentrope by 8-point Gauss--Legendre quadrature.
+Both endpoints are clamped to the gas side of the dome crossing; if the
+reference state itself grazes the dome (possible transiently at the
+boundary cell before the monitor halts the run), the relation degrades
+gracefully to the acoustic estimate
+$u \approx u_{\mathrm{ref}} + (p_{\mathrm{ref}}-p)/(\rho_{\mathrm{ref}}
+a_{\mathrm{ref}})$ instead of raising.
+\item \emph{EOS validity floor at the choke.} During deep throat
+expansion toward atmospheric back pressure late in a blowdown, the
+throat isentrope can reach the Span--Wagner lower temperature limit
+(\SI{216.6}{K}, the triple point) where the flash enters the
+sublimation region and raises. The choke maximization of
+\cref{sec:hem} treats any state the EOS refuses as ``invalid''
+($G=0$) inside a bracketed scan, so the maximization is confined to
+the valid region and the event is reported on a dedicated flag rather
+than crashing the run (\cref{sec:hem-logic}).
+\item \emph{Saturation line representation.} $T_{\mathrm{sat}}(p)$ is
+interpolated from a 200-node table (verified interpolation error
+$<\SI{0.01}{K}$); above the critical pressure
+($p_c = \SI{7.377}{MPa}$) the margin gate uses the critical
+temperature $T_c = \SI{304.13}{K}$.
+\end{itemize}
+These are failures (or fragilities) of the \emph{property evaluation},
+and they are handled at the property layer; no instance required
+modification of the fluid-dynamic solver, whose own failure modes
+(positivity, CFL) are monitored independently.
+
+\subsubsection{Single-phase validity monitoring}
+\label{sec:monitor}
+
+The distributed wellbore model is valid only for single-phase states.
+The saturation margin $m_j = T_j - T_{\mathrm{sat}}(p_j)$ is evaluated
+for \emph{every cell at every time step} (a vectorized table lookup).
+If $\min_j m_j < 0$, the run stops immediately and reports the time,
+location (cell center $z$, depth $\zeta$), and complete thermodynamic
+state $(p, T, \rho, T_{\mathrm{sat}})$ of the first dome entry. The
+margin minimum and the depth at which it occurs are recorded at every
+history output, and the full field $m(z,t)$ is recoverable from the
+$(p,T)$ snapshots. The single-phase model is never silently continued
+through a two-phase state; flashing \emph{within the choke} is the one
+sanctioned exception and is treated by the algebraic HEM boundary model
+of \cref{sec:hem}, which leaves the distributed equations untouched.
+
+\subsection{Wall friction}
+\label{sec:friction}
+
+When enabled (all campaign cases), the Darcy friction factor is
+evaluated from the explicit all-regime correlation of
+\citet{churchill1977},
+\begin{equation}
+f_D = 8\left[\left(\frac{8}{\mathrm{Re}}\right)^{12}
++ \frac{1}{(A+B)^{3/2}}\right]^{1/12},\quad
+A = \left[2.457\ln\!\frac{1}{(7/\mathrm{Re})^{0.9}
++ 0.27\,\varepsilon/D}\right]^{16},\quad
+B = \left(\frac{37530}{\mathrm{Re}}\right)^{16},
+\label{eq:churchill}
+\end{equation}
+with $\mathrm{Re} = \rho |u| D/\mu$ and roughness
+$\varepsilon = \SI{4.6e-5}{m}$ (commercial steel). Churchill's form was
+selected over the implicit Colebrook equation because it is explicit
+(no per-cell iteration), spans laminar, transitional, and turbulent
+regimes continuously (important during flow reversal and near the
+closed bottom where $\mathrm{Re}\to0$), and agrees with Colebrook
+within a few percent in the fully turbulent range --- well inside the
+uncertainty of applying any smooth-pipe-derived correlation to a real
+casing. The viscosity is a constant reference value per fluid
+($\mu = \SI{1.8e-5}{Pa.s}$ for N$_2$, \SI{1.5e-5}{Pa.s} for gaseous
+\co); the sensitivity of the solution to $f_D$ is modest because the
+discharge is choke-controlled, but friction is retained because it is
+the physical damping mechanism of the acoustic reverberation
+(\cref{sec:velocity}).
 
 \subsection{Thermal boundary hierarchy}
 
 The wall heat flux $q_w''$ is supplied by an interchangeable thermal
-model: (1)~adiabatic wall, $q_w''=0$ (fluid-dynamic baseline);
-(2)~prescribed wall temperature with convective coupling,
-$q_w'' = h\,(T_w - T)$, $h$ from the Dittus--Boelter correlation
-(simplified benchmark); (3)~prescribed or externally computed heat flux;
-and (4)~the target formulation, conjugate coupling to transient radial
-conduction through the completion layers and the formation, with
-$q'' = -k_f\,(\partial T_f/\partial r)\big|_{r_w}$ emerging from the
-coupled solution. Level~(4) is formulated and verified in
-\cref{sec:thermal} for the completion of the LSU CO$_2$ research well.
+model: (1)~adiabatic wall, $q_w''=0$; (2)~prescribed wall temperature
+with convective coupling; (3)~prescribed heat flux; and (4)~conjugate
+coupling to transient radial conduction through the completion layers
+and formation. The hierarchy, the preferred level, and the roles of the
+lower levels are discussed with the boundary conditions in
+\cref{sec:bc-thermal}; the conjugate model itself is formulated in
+\cref{sec:thermal}.
 
 %=============================================================
-\section{Numerical method}
+\section{Initial conditions}
 %=============================================================
-\label{sec:numerics}
+\label{sec:ic}
 
-\subsection{Finite-volume discretization}
+\subsection{Initial temperature: uniform versus geothermal}
+\label{sec:ic-temperature}
 
-Equations \eqref{eq:mass}--\eqref{eq:energy} are discretized on $N$
-uniform cells of width $\Delta z = L/N$ in conservative finite-volume
-form,
+Two initial temperature distributions are implemented, both as plain
+model inputs:
 \begin{equation}
-\mathbf{V}_j^{n+1} = \mathbf{V}_j^{n}
- - \frac{\Delta t}{\Delta z}\left(\mathbf{F}_{j+1/2} - \mathbf{F}_{j-1/2}\right)
- + \Delta t\, \mathbf{S}_j,
-\qquad \mathbf{V} = \left[\rho,\; \rho u,\; E\right]^{T},
+T(\zeta, 0) = T_0 \quad\text{(uniform)}, \qquad\text{or}\qquad
+T(\zeta, 0) = T_s + \Gamma\,\zeta \quad\text{(geothermal)},
+\label{eq:geo-ic}
 \end{equation}
-with interface fluxes from the HLLC approximate Riemann solver
-\citep{toro1994,toro2009} acting on MUSCL--Hancock-reconstructed primitive
-variables (van~Leer limiter). The HLLC solver restores the contact wave
-omitted by HLL, which is immaterial for the smooth blowdown interior but
-retained for consistency with the shock-capturing benchmarks and for
-robustness in later two-phase extensions. Time integration is explicit
-under the CFL condition
-$\Delta t = \mathrm{CFL}\,\Delta z / \max_j\left(|u_j| + a_j\right)$,
-with $\mathrm{CFL} = 0.8$ unless stated otherwise.
+with $\zeta = L - z$ the depth below the wellhead. The uniform state is
+retained as the conservative (coldest-margin) reference and for
+continuity with the earlier nitrogen baseline. The geothermal form is
+the physically motivated shut-in state of a well in thermal equilibrium
+with its surroundings, and both parameters are adjustable inputs
+(dataclass fields), not hard-coded constants.
 
-\subsection{Source-term treatment}
-\label{sec:sources}
+For the Louisiana-summer nominal case:
+\begin{itemize}
+\item $T_s = \SI{305.4}{K}$ (\SI{32.2}{\celsius}, \SI{90}{\degree F}):
+a representative warm summer-day wellhead temperature for Baton Rouge.
+The NOAA 1991--2020 climate normals for Baton Rouge Metropolitan
+Airport give a July daily mean of ${\approx}\,\SI{28.5}{\celsius}$ and
+mean daily maximum of ${\approx}\,\SI{33}{\celsius}$ \citep{noaa2021};
+\SI{90}{\degree F} sits between the two and corresponds to a shut-in
+fluid column that has equilibrated during a hot afternoon.
+\item $\Gamma = \SI{25.5}{K/km}$ (\SI{1.4}{\degree F}/100\,ft): a
+typical Louisiana Gulf-Coast geothermal gradient; regional compilations
+place coastal-Louisiana gradients in the range
+${\approx}\,22$--$\SI{30}{K/km}$ \citep{blackwell2011}. The same value
+has been the default of the formation thermal model since its
+introduction, so fluid and formation are initialized from one profile.
+\end{itemize}
+\Cref{tab:geoT} tabulates the resulting initial fluid temperatures at
+the wellhead, bottomhole, and the fiber-optic sensor depths of
+\cref{sec:sensors}. Relative to the uniform \SI{300}{K} column, the
+geothermal column is warmer everywhere and \emph{increasingly} so with
+depth --- the property that matters for \co, because hydrostatic
+compression raises $T_{\mathrm{sat}}(p)$ with depth: the uniform
+column's saturation margin \emph{decreases} downhole (from \SI{12.6}{K}
+at the wellhead to \SI{6.5}{K} at bottom), whereas the geothermal
+gradient more than compensates, giving margins that \emph{increase}
+from \SI{18.0}{K} to \SI{27.6}{K} top to bottom.
 
-Gravity is included in the Hancock predictor half-step (maintaining formal
-second order), and the momentum source $-\rho g$, friction, and wall heat
-flux are advanced with a Heun (trapezoidal) corrector. The gravitational
-\emph{work} term in \cref{eq:energy} requires care: evaluating it as
-$-\rho_j u_j g$ at cell centers leaves a residual in the discrete energy
-budget that does \emph{not} converge with mesh or time-step refinement,
-because the potential-energy inventory evolves according to the
-\emph{face} mass fluxes while the work term samples cell-centered momenta.
-The term is therefore discretized in the energy-consistent face-flux form
+\begin{table}[htb]
+\centering
+\caption{Geothermal summer initialization ($T_s = \SI{305.4}{K}$,
+$\Gamma = \SI{25.5}{K/km}$): initial fluid temperature and, for \co\
+at \SI{5}{MPa} wellhead pressure (hydrostatic), the local pressure and
+saturation margin. Depths include the fiber-optic sensor stations.}
+\label{tab:geoT}
+\begin{tabular}{S[table-format=4.0]cS[table-format=3.1]S[table-format=1.3]S[table-format=2.1]}
+\toprule
+{Depth [ft]} & {Depth [m]} & {$T(\zeta,0)$ [K]} & {$p(\zeta,0)$ [MPa]} &
+{$m(\zeta,0)$ [K]}\\
+\midrule
+0    & 0     & 305.4 & 5.000 & 18.0\\
+50   & 15.2  & 305.8 & 5.017 & 18.2\\
+500  & 152.4 & 309.3 & 5.179 & 20.3\\
+1000 & 304.8 & 313.2 & 5.372 & 22.8\\
+1500 & 457.2 & 317.1 & 5.561 & 25.3\\
+1950 & 594.4 & 320.6 & 5.727 & 27.4\\
+2000 & 609.6 & 320.9 & 5.745 & 27.6\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Documented approximation.} The seasonal temperature wave
+penetrates only the top ${\sim}\SI{10}{m}$ of the ground, so
+initializing the \emph{formation} with the summer surface temperature
+slightly warms the shallow formation relative to the annual-mean
+profile ($T_s = \SI{294.3}{K}$). For blowdown time scales
+($\lesssim$ hours) the effect is confined to the near-wellhead cells
+and is small against the \SI{18}{K} initial margin; both profiles
+remain available as inputs, and the conjugate model accepts any
+\texttt{Geothermal}$(T_s, \Gamma)$ instance.
+
+\subsection{Initial pressure: hydrostatic initialization}
+\label{sec:ic-pressure}
+
+The initial pressure is \emph{not} uniform. For a \SI{609.6}{m} column
+of \co\ at ${\sim}\SI{130}{kg/m^3}$, the gravitational head is
+$\rho g L \approx \SI{0.77}{MPa}$ --- 15\,\% of the wellhead pressure
+--- and even for nitrogen (${\sim}\SI{56}{kg/m^3}$) it is
+\SI{0.33}{MPa}, 6.6\,\%. A uniform-pressure initial condition is
+therefore not a quiescent state: it superposes a gravitational settling
+transient of amplitude comparable to the valve-opening wave itself,
+contaminating the early-time wave physics (this was observed directly
+in the first $x$--$t$ diagrams of the project and is the reason
+hydrostatic initialization was adopted). All campaign cases are
+initialized hydrostatically with the wellhead pressure prescribed:
 \begin{equation}
-\left(-\rho u g\right)_j \;\longrightarrow\;
- -\,g\,\frac{F^{\rho}_{j-1/2} + F^{\rho}_{j+1/2}}{2},
-\label{eq:gravwork}
+\frac{dp}{d\zeta} = \rho\!\left(p, T(\zeta,0)\right) g,
+\qquad p(0) = p_{\mathrm{wh}},
+\label{eq:hydro}
 \end{equation}
-where $F^{\rho}$ denotes the time-centered HLLC mass flux. With
-\cref{eq:gravwork} the discrete budget
-\begin{equation}
-\sum_j \left(E_j + \rho_j g z_j\right) A\,\Delta z
-\;+\; \int_0^t \mdot\,\left(h_0 + gL\right)\,dt'
-\;=\; \text{const}
-\label{eq:budget}
-\end{equation}
-telescopes exactly (machine precision), where $h_0$ is the stagnation
-enthalpy of the effluent. The scheme is not well-balanced in the sense of
-preserving discrete hydrostatic equilibria exactly; residual velocities of
-order \SI{5}{cm/s} (200 cells) persist in a closed hydrostatic column,
-which is negligible against blowdown velocities but should be revisited if
-long-time post-blowdown equilibria become of interest.
+integrated downward cell by cell with the midpoint rule
+(half-cell step from the wellhead face to the first cell center, then
+full-cell steps), evaluating $\rho(p,T)$ from the \emph{same} EOS used
+by the solver, with the local initial temperature from
+\cref{eq:geo-ic}. Pressure, temperature, and density are thus mutually
+consistent by construction --- density is never imposed independently.
+For the isothermal ideal gas the closed-form barometric profile
+$p = p_{\mathrm{wh}}\exp\!\left[g\zeta/(RT_0)\right]$ is used instead
+(and the numerical integrator reproduces it); for \co\ the ideal
+formula is \emph{not} acceptable: at $Z \approx 0.69$ it underestimates
+the pressure gradient by $1/Z - 1 \approx 45\,\%$, i.e.\ by
+${\sim}\SI{0.35}{MPa}$ at bottomhole. The real-fluid hydrostatic bottom
+pressure at \SI{5}{MPa}/geothermal is \SI{5.745}{MPa}
+(\cref{tab:geoT}); nitrogen under the same conditions gives
+\SI{5.331}{MPa}.
 
-\subsection{Bottom boundary}
+An admissibility consequence worth recording: a wellhead pressure of
+\SI{6.5}{MPa} at \SI{300}{K} was found to be \emph{infeasible} as a
+single-phase \co\ initial condition --- the hydrostatic column crosses
+$p_{\mathrm{sat}}(\SI{300}{K}) = \SI{6.71}{MPa}$ at depth, i.e.\ the
+initial condition itself is two-phase. The saturation monitor flags
+this at $t=0$, which is the designed behavior.
 
-The closed bottom is an exact solid wall: the wall-face left state is the
-mirror image (in velocity) of the MUSCL-reconstructed interior right
-state, for which the HLLC mass and energy fluxes vanish identically.
+\subsection{Verification: stationarity of the closed well}
+\label{sec:stationarity}
 
-\subsection{Wellhead choke boundary condition}
+A hydrostatically initialized column with the valve closed must remain
+stationary; any numerically generated motion measures the discrete
+imbalance between the pressure-gradient flux and the gravity source
+(the scheme is not well-balanced by construction, so a small residual
+is expected and must be quantified). \Cref{tab:static} reports the
+maximum residual velocity magnitude and pressure drift after
+\SI{600}{s} of closed-well integration --- roughly $10^5$ acoustic
+time steps --- for both fluids, both initializations, and two grids.
+Residual velocities are a few centimeters per second at the campaign
+grid and converge at first order with refinement (the slope limiter
+reduces to first order at the local extremum of the
+pressure-gradient/gravity balance); the associated pressure drift is
+at most a few kPa out of \SI{5}{MPa} ($<10^{-3}$ relative); mass is
+conserved to machine precision. Against blowdown velocities of
+$\mathcal{O}(1$--$10)\,\si{m/s}$ and the \SI{130}{kPa} leading
+expansion wave, the spurious motion is smaller by two to three orders
+of magnitude. This test doubles as the
+verification of the gravity source-term treatment and of the
+real-EOS/geothermal initialization algorithm of \cref{eq:hydro}: an
+inconsistent initialization (e.g.\ barometric pressure with real-fluid
+density) produces an immediate settling transient orders of magnitude
+larger.
+
+\begin{table}[htb]
+\centering
+\caption{Closed-well stationarity after \SI{600}{s}: maximum residual
+$|u|$ and pressure drift $\max_z|p - p(0)|$ (wellhead pressure
+\SI{5}{MPa}, hydrostatic initialization, friction active).}
+\label{tab:static}
+\begin{tabular}{llccc}
+\toprule
+Case & $N$ & $\max|u|$ [m/s] & $\max|\Delta p|$ [Pa] &
+$|\Delta M|/M_0$\\
+\midrule
+N$_2$, uniform \SI{300}{K} & 100 & $1.1\times10^{-1}$ & 1585 & $8\times10^{-16}$\\
+N$_2$, uniform \SI{300}{K} & 300 & $3.6\times10^{-2}$ & 528 & $4\times10^{-16}$\\
+N$_2$, geothermal          & 100 & $1.1\times10^{-1}$ & 1569 & $<10^{-16}$\\
+N$_2$, geothermal          & 300 & $3.6\times10^{-2}$ & 535 & $6\times10^{-16}$\\
+\co, uniform \SI{300}{K}   & 100 & $1.7\times10^{-1}$ & 4245 & $7\times10^{-16}$\\
+\co, uniform \SI{300}{K}   & 300 & $5.7\times10^{-2}$ & 1396 & $4\times10^{-16}$\\
+\co, geothermal            & 100 & $1.6\times10^{-1}$ & 3730 & $4\times10^{-16}$\\
+\co, geothermal            & 300 & $5.7\times10^{-2}$ & 1191 & $5\times10^{-16}$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Initial fluid composition}
+
+Each case is a pure single-component fluid (N$_2$ or \co); mixtures,
+impurities, and residual-gas contamination of the column are outside
+the present scope. For the LSU facility this corresponds to the
+intended operation of filling the 7-5/8\,in casing with a single
+working fluid.
+
+%=============================================================
+\section{Boundary conditions}
+%=============================================================
+\label{sec:bc}
+
+\subsection{Closed bottom}
+\label{sec:bc-bottom}
+
+The closed bottom is an exact solid wall implemented at the
+reconstruction level: the wall-face \emph{left} state is the mirror
+image (in velocity) of the MUSCL-reconstructed interior \emph{right}
+state at that face, so the Riemann problem at the wall face is exactly
+symmetric and the HLLC mass and energy fluxes vanish identically ---
+not merely to truncation order. This matters: an earlier ghost-cell
+variant that mirrored \emph{cell} states (rather than reconstructed
+face states) leaked mass at the wall at $\mathcal{O}(10^{-6})$ per
+step through the gravity-modified predictor, which the present form
+eliminates exactly. The momentum flux at the wall face reduces to the
+wall pressure, as it must.
+
+\subsection{Wellhead: coupling of the interior to the choke}
 \label{sec:choke}
 
-The wellhead must not be treated as a fixed-pressure boundary while a
-restriction separates the well from the environment. The pipe-side face
-state $(\rho_f, u_f, p_f)$ at $z = L$ is instead required to satisfy,
-simultaneously:
+\subsubsection{Why the wellhead is not a pressure boundary}
+
+Imposing the environmental pressure $p_b$ directly on the uppermost
+cell would be wrong in kind, not merely in degree: it removes the
+restriction from the problem, so the discharge rate is set by the pipe
+itself (the open-pipe limit, here ${\sim}\SI{143}{kg/s}$ at the
+baseline state) rather than by the choke
+(${\sim}\SI{1.7}{kg/s}$) --- two orders of magnitude apart. The
+restriction is the element that couples the internal wellbore dynamics
+to the environment, meters the discharge, and determines whether the
+flow is choked; it must therefore appear \emph{in} the boundary
+condition. Conversely, while the flow through the choke is choked, the
+interior solution is causally disconnected from $p_b$, and the
+boundary condition must reproduce that property exactly --- a
+fixed-pressure condition cannot.
+
+\subsubsection{The two-relation closure}
+
+The pipe-side face state $(\rho_f, u_f, p_f)$ at $z=L$ is required to
+satisfy simultaneously:
 \begin{enumerate}
-\item \emph{Coupling to the interior.} The face lies on the isentrope
-through the adjacent interior state $(\rho_i, u_i, p_i)$ and on its
-outgoing $C^{+}$ characteristic,
+\item \emph{Compatibility with the interior} (supply side): the face
+lies on the isentrope through the adjacent interior state
+$(\rho_i, u_i, p_i)$ and on its outgoing $C^{+}$ characteristic,
 \begin{equation}
-u_f = u_i + \frac{2}{\gamma - 1}\left(a_i - a_f\right),
-\qquad
-\rho_f = \rho_i \left(p_f/p_i\right)^{1/\gamma};
+u_f = u_i + \int_{p_f}^{p_i}\frac{dp'}{\rho a}\bigg|_{s=s_i},
+\qquad \rho_f = \rho(p_f;\,s_i),
 \label{eq:cplus}
 \end{equation}
-\item \emph{Valve mass balance.} The flow accepted by the choke, modeled
-as a quasi-steady isentropic nozzle fed by the stagnation state
-$(p_{0f}, T_{0f})$ of the face flow, equals the pipe efflux:
+which for the ideal gas reduces to the familiar
+$u_f = u_i + \tfrac{2}{\gamma-1}(a_i - a_f)$,
+$\rho_f = \rho_i (p_f/p_i)^{1/\gamma}$;
+\item \emph{Valve mass balance} (demand side): the flow accepted by
+the choke, modeled as a quasi-steady nozzle fed by the stagnation
+state $(h_{0f}, s_f)$ of the face flow, equals the pipe efflux:
 \begin{equation}
 \rho_f u_f A = C_d A_t\, G\!\left(p_{0f}, T_{0f}, p_b\right),
 \qquad A_t = \pi d_c^2/4,
 \label{eq:valve}
 \end{equation}
-where $G$ is the standard compressible-orifice mass flux, which is choked
-when $p_b/p_{0f} \le \left(2/(\gamma+1)\right)^{\gamma/(\gamma-1)}$ and
-subcritical otherwise.
+with the nozzle flux $G$ of \cref{sec:hem}.
 \end{enumerate}
+The quasi-steady treatment of the choke is justified by scale
+separation: the residence time in the restriction
+($\sim d_c/a \approx \SI{e-4}{s}$) is four to five orders of magnitude
+shorter than the discharge time scale, so the nozzle traverses a
+sequence of steady states.
+
 Substitution of \cref{eq:cplus} into \cref{eq:valve} yields a scalar
-equation for $p_f$, solved by Brent iteration on a bracket bounded below
-by the \emph{sonic face pressure} --- the $C^{+}$ coupling forbids a
-supersonic pipe exit; if the valve demands more than the sonic pipe
-supply, the exit itself runs sonic, recovering the open-pipe choking limit
-$A_t \to A$ --- and above by the pressure at which \cref{eq:cplus} brings
-the face to rest. When the interior stagnation pressure falls below
-$p_b$, the valve closes (check-valve clamp; backflow excluded). The
-resulting face flux
-$\left[\rho_f u_f,\; \rho_f u_f^2 + p_f,\; u_f (E_f + p_f)\right]$
-replaces the HLLC flux at the top face, so the interior update and the
+equation for $p_f$, solved by Brent iteration on a bracket bounded
+below by the \emph{sonic face pressure} --- the $C^{+}$ coupling
+forbids a supersonic pipe exit; if the valve demands more than the
+sonic pipe supply, the exit itself runs sonic, recovering the
+open-pipe choking limit as $A_t \to A$ --- and above by the pressure
+at which \cref{eq:cplus} brings the face to rest. When the interior
+stagnation pressure falls below $p_b$, the valve closes (check-valve
+clamp; backflow is excluded by assumption). The resulting face flux
+$[\rho_f u_f,\; \rho_f u_f^2 + p_f,\; u_f(E_f + p_f)]$ \emph{replaces}
+the HLLC flux at the top face, so the interior update and the
 discharge remain mutually consistent through the entire
-choked~$\to$~unchoked~$\to$~closed sequence as the well depressurizes, and
-$\mdot(t) = \rho_f u_f A$ is obtained as part of the solution.
+choked~$\to$~unchoked~$\to$~closed sequence, and
+$\mdot(t) = \rho_f u_f A$ is obtained as part of the solution rather
+than prescribed.
 
-%=============================================================
-\section{Verification}
-%=============================================================
-\label{sec:verification}
+\subsubsection{Real-fluid implementation: demand/supply splitting}
+\label{sec:split}
 
-\subsection{Shock-capturing heritage}
+For the real fluid, every evaluation of \cref{eq:cplus,eq:valve}
+involves CoolProp flash calls, so the exact nonlinear solve at every
+time step is costly. The implementation splits the two physical time
+scales:
+\begin{itemize}
+\item the \emph{demand} $C_d A_t G(p_0, T_0, p_b)$ depends on the
+slowly evolving stagnation state and is recomputed only when the
+wellhead pressure has drifted by 0.2\,\% since the last evaluation;
+\item the \emph{supply} response \cref{eq:cplus} must track the
+boundary cell \emph{every} step and is applied in linearized
+(acoustic) form,
+$u_f = u_i + (p_i - p_f)/(\rho_i a_i)$,
+$\rho_f = \rho_i + (p_f - p_i)/a_i^2$, with the face internal energy
+from the isentropic linearization
+$e_f = e_i + (p_i/\rho_i^2)(\rho_f - \rho_i)$; the resulting quadratic
+in $p_f$ is closed in four Newton steps. The linearization error is
+$\mathcal{O}\!\left[(\Delta p_{\mathrm{face}}/\rho a^2)^2\right]
+\approx 10^{-5}$ for choke-dominated discharge, where the face
+pressure defect is small. The exact nonlinear solve (quadrature
+invariant plus Brent) is retained in the code for verification and
+for large-$\Delta p$ configurations such as the open-pipe limit.
+\end{itemize}
 
-The HLLC/MUSCL--Hancock kernel was verified in Phase~2 on the single-phase
-shock tube of \citet{gessner2010} (air; \SI{500}{\kilo\pascal},
-\SI{400}{K} / \SI{100}{\kilo\pascal}, \SI{300}{K}; 4001-point grid)
-against the exact Riemann solution. \Cref{tab:shocktube} summarizes the
-mean absolute errors: the first-order Godunov scheme already matches the
-best legacy SCMM variant, and MUSCL--Hancock improves on it by an order of
-magnitude at a small fraction of the cost, with discrete conservation to
-machine precision. The HLLC flux is indistinguishable from the exact
-Riemann flux on this problem.
+\paragraph{Negative result (recorded deliberately).} The first
+implementation amortized CoolProp cost by freezing the \emph{entire}
+face flux over a 5-step stride. The frozen outflow decouples from the
+boundary cell and the pair oscillates unstably, draining the wellhead
+cell by ${\sim}\SI{2}{MPa}$ within a second of simulated time --- an
+artifact that initially masqueraded as physical dome entry and was
+exonerated only by running nitrogen through the identical general-EOS
+code path. The lesson is structural: \emph{the fast-acoustic part of an
+outflow boundary cannot be time-lagged}; only the slow (demand) part
+can. With the split above the boundary is stable and the real-fluid
+overhead is ${\sim}\SI{3}{ms}$ per step.
 
-\begin{table}[htb]
-\centering
-\caption{Single-phase shock-tube benchmark at $t=\SI{3}{ms}$: mean
-absolute errors against the exact solution (4001 nodes / 4000 cells).
-SCMM rows: Python reconstruction of \citet{gessner2010}; thesis values in
-parentheses.}
-\label{tab:shocktube}
-\begin{tabular}{lccccc}
-\toprule
-Scheme & $p$ [\si{Pa}] & $u$ [\si{m/s}] & $\rho$ [\si{kg/m^3}] & $T$ [\si{K}] & Wall time [\si{s}]\\
-\midrule
-SCMM non-cons., 2nd order & 3027 (2713) & 4.29 & 0.0230 & 2.02 & 186\\
-SCMM conservative, 2nd order & 383 (312) & 0.44 & 0.0041 & 0.35 & 399\\
-FV first order, HLLC & 316 & 0.28 & 0.0041 & 0.41 & 1.4\\
-FV MUSCL--Hancock, HLLC & 34.9 & 0.040 & 0.00057 & 0.065 & 2.0\\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{The choke flux: single-phase and homogeneous-equilibrium
+formulations}
+\label{sec:hem}
 
-\subsection{Conservation audits}
+\subsubsection{Physical problem}
 
-For the closed well the solution remains identically at rest. For the
-discharging well with gravity active, the mass balance
-$M(t) + \int_0^t \mdot\,dt' = M(0)$ and the energy balance
-\cref{eq:budget} close to $\mathcal{O}(10^{-15})$ relative error in all
-cases reported here, including the open-pipe limit. During development,
-the cell-centered gravitational work term was found to leave a
-non-convergent budget residual of $\mathcal{O}(10^{-4})$; the face-flux
-form \cref{eq:gravwork} removes it identically (\cref{sec:sources}).
+High-pressure fluid from the wellbore enters the choke and expands
+toward the back pressure. Two qualitatively distinct limits exist. If
+the pressure ratio is modest, the flow exits subsonically and the
+discharge responds to $p_b$ (\emph{subcritical}). If the ratio is
+large --- the prevailing condition for most of a blowdown --- the flux
+reaches a maximum at a sonic throat state and becomes independent of
+$p_b$ (\emph{critical/choked}). For \co\ a third element enters:
+depending on the upstream state, the expansion path may cross the
+vapor--liquid saturation boundary \emph{inside} the restriction, so
+that the throat state is a flashing two-phase mixture even while the
+wellbore fluid upstream is entirely single phase. At the campaign
+initial state (\SI{5}{MPa}, \SI{300}{K}) this is not an edge case: the
+isentrope from the stagnation state reaches the dome \emph{before} the
+sonic point, so the choke flashes from the first instant.
 
-\subsection{Quasi-static lumped-vessel limit}
+\subsubsection{Isentropic-nozzle flux}
 
-With gravity deactivated, the 1-D solution must approach the
-zero-dimensional adiabatic-vessel model (isentropic residual gas,
-quasi-steady orifice discharge) whenever the acoustic transit time
-$L/a_0 \approx \SI{1.7}{s}$ is small against the discharge time scale
-($\approx \SI{200}{s}$ for the baseline choke). \Cref{fig:vessel} shows
-wellhead pressure, mass flow rate, and inventory against the ODE
-reference: maximum relative deviations are \SI{0.9}{\percent} ($p$) and
-\SI{0.8}{\percent} ($\mdot$) after the initial wave transient. With
-larger chokes the \emph{wellhead} pressure sits several percent below the
-column mean --- a genuine 1-D effect of the sustained expansion toward
-the choke --- while the mass inventory continues to track the lumped
-model to \SI{0.5}{\percent}.
+The choke is modeled as an isentropic nozzle: the expansion through
+the restriction is fast (residence $\sim\SI{e-4}{s}$) and compact, so
+heat exchange and friction within it are neglected, and all
+irreversibility is lumped into the discharge coefficient $C_d$. Along
+the isentrope $s = s_0$ from the stagnation state $(h_0, s_0)$,
+energy conservation gives the throat velocity
+$w(p_t) = \sqrt{2\left[h_0 - h(p_t, s_0)\right]}$ and the mass flux
+\begin{equation}
+G(p_t) = \rho(p_t, s_0)\;\sqrt{2\left[h_0 - h(p_t, s_0)\right]}.
+\label{eq:G}
+\end{equation}
+The physical throat state maximizes $G$ over the throat pressure:
+\begin{equation}
+G^* = \max_{p_b \le p_t \le p_0} G(p_t), \qquad
+\text{choked} \iff p_t^* > p_b,
+\label{eq:Gmax}
+\end{equation}
+the maximizer being the sonic condition $w = a$ expressed variationally
+--- a form that requires no sound-speed evaluation and therefore
+remains meaningful for two-phase (equilibrium) throat states. If the
+maximizer exceeds $p_b$ the flow is choked at $G^*$; otherwise the flux
+is evaluated at $p_t = p_b$ (subcritical). For the calorically perfect
+gas \cref{eq:G,eq:Gmax} reduce to the textbook result with critical
+pressure ratio $\left(2/(\gamma+1)\right)^{\gamma/(\gamma-1)}$, which
+the implementation uses directly on the ideal path.
+
+\subsubsection{Homogeneous Equilibrium Model for flashing in the choke}
+\label{sec:hem-model}
+
+When the isentrope crosses the saturated-vapor line at
+$p_{\mathrm{dome}}(s_0)$ before the maximizer is reached, the throat
+state is two-phase and \cref{eq:G} requires mixture properties. These
+are supplied by the \emph{Homogeneous Equilibrium Model} (HEM): the
+density and enthalpy in \cref{eq:G} are the equilibrium-flash values
+from the same Span--Wagner EOS,
+\begin{equation}
+\rho_{\mathrm{HEM}}^{-1} = \frac{1-x}{\rho_\ell(p_t)}
+ + \frac{x}{\rho_v(p_t)},
+\qquad
+h_{\mathrm{HEM}} = (1-x)\,h_\ell(p_t) + x\,h_v(p_t),
+\qquad
+x = \frac{s_0 - s_\ell(p_t)}{s_v(p_t) - s_\ell(p_t)},
+\label{eq:hem}
+\end{equation}
+evaluated in practice by CoolProp's $(p,s)$ equilibrium flash. The
+assumptions, stated explicitly, are:
+\begin{enumerate}
+\item \emph{local thermodynamic equilibrium} between the phases at
+every point of the expansion (no metastability, no superheated liquid
+or subcooled vapor);
+\item \emph{mechanical equilibrium}: both phases share one pressure;
+\item \emph{thermal equilibrium}: both phases share one temperature,
+the saturation temperature at the local pressure;
+\item \emph{no slip}: equal phase velocities, so a single mixture
+momentum/energy balance applies and \cref{eq:G} retains its
+single-stream form;
+\item \emph{instantaneous phase change} relative to the residence time
+through the restriction --- nucleation and interphase transfer are
+assumed fast on $\sim\SI{e-4}{s}$;
+\item \emph{homogeneous mixture}: the two-phase medium is treated as a
+single pseudo-fluid with the mixture properties \cref{eq:hem}.
+\end{enumerate}
+Assumption 5 is the physically weakest for short restrictions: real
+flashing nozzles exhibit delayed nucleation and thermodynamic
+non-equilibrium that \emph{raise} the critical flow above the HEM
+prediction, which is why HEM is generally the conservative
+(lower-bound) estimate for short orifices
+\citep{starkman1964,henry1971}. Non-equilibrium corrections (e.g.\ the
+Henry--Fauske model) and slip corrections exist, as does Leung's
+$\omega$-method correlation of the HEM result \citep{leung1986}; they
+are deliberately not adopted at this stage because (i)~HEM is the
+standard, parameter-free first model, (ii)~the correction magnitude
+depends on choke internals not yet fixed for the facility, and
+(iii)~at the conditions computed here the throat barely enters the
+dome (quality $x_t \ge 0.93$ in all campaign results), so the
+difference between HEM and its corrections is small compared with the
+$C_d$ uncertainty. HEM is appropriate as the first model precisely
+because it confines all two-phase physics to an algebraic boundary
+relation --- the distributed wellbore equations remain single-phase,
+which is the intended staging of the project; a full two-phase
+wellbore model is deferred, not approximated.
+
+The practical consequence of the HEM extension is modest at the
+campaign initial state and grows as the well cools: at
+\SI{5}{MPa}/\SI{300}{K} the sonic point sits just inside the dome
+(throat quality $x_t = 0.975$) and the HEM critical flux exceeds the
+flux evaluated at the dome crossing (the previous single-phase bound)
+by only 1.4\,\% --- i.e.\ the earlier dome-limited treatment was
+already an excellent approximation there. The real-gas HEM flux
+exceeds the ideal-gas formula by 17\,\% at the same state (the
+$\sqrt{\rho_0 p_0}$ scaling at $Z = 0.69$), and reduces to it at low
+pressure (\cref{sec:vv-choke}). In the time domain, the HEM choke
+shortens the adiabatic uniform-IC \co\ run's time to in-wellbore dome
+entry from \SI{193}{s} to \SI{173}{s} --- a direct, integrated measure
+of the flux correction.
+
+\subsubsection{Discharge coefficient and effective area}
+\label{sec:cd}
+
+The only empirical element of the choke model is the discharge
+coefficient in the effective area $C_d A_t$: it lumps the
+vena-contracta contraction, boundary-layer blockage, and
+multidimensionality of the real restriction. The baseline value
+$C_d = 0.84$ represents a rounded-entry choke-type restriction,
+between the sharp-edged-orifice value ($C_d \approx 0.61$) and the
+smooth converging nozzle ($C_d \approx 0.95$--$1.0$)
+\citep{perry2008}; the facility hardware ultimately fixes it, and it
+should be treated as the principal calibration parameter when
+blowdown data become available. Its influence on the solution is
+simple and was verified numerically: because the discharge is
+choke-controlled and quasi-static, $\mdot \propto C_d$
+instantaneously, and the blowdown clock stretches as $1/C_d$.
+A sweep over $C_d \in \{0.61, 0.72, 0.84, 1.0\}$ (nitrogen,
+\SI{5}{MPa}, \SI{1200}{s}, adiabatic) gives initial mass flow rates
+proportional to $C_d$ to within 0.2\,\% and half-inventory times
+obeying the $1/C_d$ scaling to within 0.02\,\% (the product
+$C_d\,t_{1/2}$ is constant across the sweep: 680.4/576.5/494.2/
+\SI{415.2}{s} at $C_d$ = 0.61/0.72/0.84/1.0) --- the adiabatic
+choke-controlled blowdown is self-similar in the stretched time
+$C_d t$, so the entire uncertainty in $C_d$ maps onto the blowdown
+clock and nothing else. No vena-contracta pressure correction is applied
+beyond $C_d$ itself, and the throat area is the geometric bore area
+$A_t = \pi d_c^2/4$ with $d_c = \SI{12.7}{mm}$.
+
+\subsubsection{Flow-regime classification and decision logic}
+\label{sec:hem-logic}
+
+The model distinguishes explicitly among five conditions:
+\begin{enumerate}
+\item \emph{single-phase subcritical discharge} --- maximizer of
+\cref{eq:Gmax} at $p_t = p_b$, isentrope entirely outside the dome;
+\item \emph{single-phase critical (choked) discharge} --- interior
+maximizer, dry isentrope down to $p_t^*$;
+\item \emph{flashing during the expansion} --- the isentrope crosses
+$p_{\mathrm{dome}}(s_0)$ above the throat pressure, so part of the
+expansion path is two-phase (flag \texttt{choke\_flashing});
+\item \emph{two-phase critical discharge by HEM} --- the maximizer
+itself lies inside the dome; the reported throat quality
+\texttt{choke\_quality} is the HEM $x_t$ at $p_t^*$;
+\item \emph{two-phase conditions upstream, inside the wellbore} ---
+outside the validity of the present distributed model; the run is
+\emph{halted and flagged} with the complete first-entry state
+(\cref{sec:monitor}), never silently extrapolated.
+\end{enumerate}
+Conditions 1--4 are handled by the wellhead boundary model; condition
+5 terminates the simulation by design. \Cref{fig:logic} gives the
+per-time-step decision logic.
 
 \begin{figure}[htb]
 \centering
-\includegraphics[width=\textwidth]{blowdown_vs_vessel_ode.png}
-\caption{Verification against the lumped adiabatic-vessel ODE (gravity
-off): wellhead pressure, mass flow rate, and mass inventory.}
-\label{fig:vessel}
+\fbox{\begin{minipage}{0.92\textwidth}\small
+\textbf{Choke boundary logic, executed each flow time step}
+\begin{enumerate}
+\item Saturation monitor (all cells): if $\min_j [T_j -
+T_{\mathrm{sat}}(p_j)] < 0$ $\rightarrow$ \textbf{STOP}; report
+$(t, \zeta, p, T, \rho, T_{\mathrm{sat}})$ of first entry
+[condition 5].
+\item If wellhead pressure has drifted $>0.2\,\%$ since the last
+demand evaluation:
+  \begin{enumerate}
+  \item stagnation state $(p_0, T_0, s_0, h_0)$ from the boundary-cell
+  state (CoolProp flash);
+  \item if $p_0 \le p_b$: demand $= 0$ (valve closed; check-valve
+  clamp);
+  \item else maximize $G(p_t)$, \cref{eq:G}, over
+  $[\,\max(p_b, \SI{0.12}{MPa}, 0.05\,p_0),\; p_0\,]$: coarse 15-point
+  logarithmic scan with EOS-invalid states (sublimation-region flash
+  failures) assigned $G=0$, then bounded refinement in the best valid
+  bracket;
+  \item classify: maximizer at $p_b$ $\rightarrow$ subcritical
+  [1 or 3]; interior maximizer $\rightarrow$ choked [2 or 4]; throat
+  inside the dome ($p_t^{\mathrm{eff}} < p_{\mathrm{dome}}(s_0)$)
+  $\rightarrow$ flashing, record HEM quality $x_t$ [3/4]; maximization
+  truncated by EOS validity $\rightarrow$ flag
+  \texttt{dome\_limited} (expansion into the sublimation region;
+  reported, flux taken at the validity bound);
+  \item demand $\leftarrow C_d A_t G$.
+  \end{enumerate}
+\item Every step: solve the linearized supply relation
+(\cref{sec:split}) of the boundary cell against the cached demand for
+$(\rho_f, u_f, p_f, e_f)$; face velocity capped at $0.99\,a_i$ (sonic
+pipe supply).
+\item Impose the face flux as the top-face HLLC flux;
+$\mdot = \rho_f u_f A$.
+\end{enumerate}
+\end{minipage}}
+\caption{Decision logic of the wellhead choke boundary condition. The
+numbers in brackets refer to the regime classification of
+\cref{sec:hem-logic}.}
+\label{fig:logic}
 \end{figure}
 
-\subsection{Grid, time-step, and boundary sensitivity}
+\subsection{Radial thermal boundary}
+\label{sec:bc-thermal}
 
-For the baseline case over the first \SI{60}{s}, the maximum relative
-deviation of $\mdot(t)$ from an 800-cell reference is
-\SI{2.6}{\percent} (100 cells), \SI{0.88}{\percent} (200), and
-\SI{0.26}{\percent} (400); reducing the CFL number from 0.9 to 0.5 and
-0.2 changes $\mdot(t)$ by at most \SI{0.6}{\percent} and
-\SI{1.2}{\percent}, respectively. A choke-bore sweep from
-1/4\,in to the open-pipe limit (\cref{fig:choke}) yields initial
-mass flow rates scaling with throat area as expected
-(\num{0.84}/\num{3.32}/\num{12.9}/\SI{46.6}{kg/s}, open pipe
-\SI{143}{kg/s}), monotonic throughout, stable in the pipe-choked limit,
-and conservative to machine precision in every case.
-
-\begin{figure}[htb]
-\centering
-\includegraphics[width=0.72\textwidth]{blowdown_choke_sweep.png}
-\caption{Sensitivity of the wellhead mass flow rate to the choke bore,
-including the open-pipe limit.}
-\label{fig:choke}
-\end{figure}
-
-%=============================================================
-\section{Baseline results: adiabatic nitrogen blowdown}
-%=============================================================
-\label{sec:results}
-
-\subsection{Wave propagation}
-
-\Cref{fig:xt} presents the distance--time diagram of the pressure
-perturbation $p - p_{\mathrm{init}}(z)$ during the first \SI{8}{s}, for a
-run initialized in isothermal hydrostatic equilibrium so that the
-valve-opening wave is the only transient (a uniform initial column
-superposes a gravitational settling wave of comparable amplitude).
-Opening the choke launches an expansion wave that descends the well at
-the sound speed, reaching the bottom at $t = L/a_0 \approx \SI{1.7}{s}$,
-reflecting, and returning to the wellhead at $2L/a_0 \approx \SI{3.4}{s}$;
-since the choke passes only a small fraction of the sonic pipe flux, the
-wellhead acts as a nearly closed end and the wave re-reflects as an
-expansion, producing the staircase depressurization of period $2L/a_0$
-with steps of $\mathcal{O}(\SI{130}{\kilo\pascal})$ visible in the
-figure. Animations of the full field evolution accompany this document.
-The initial expansion is weak relative to the inventory pressure
-($\rho a\,\Delta u \sim \SI{1.5e5}{Pa}$ against \SI{13.79}{MPa}), and
-the subsequent discharge is quasi-static --- consistent with the
-lumped-vessel agreement above. Larger chokes proportionally strengthen
-the initial wave.
-
-\begin{figure}[htb]
-\centering
-\includegraphics[width=0.8\textwidth]{blowdown_xt.png}
-\caption{Distance--time ($x$--$t$) diagram of the pressure perturbation
-$p - p_{\mathrm{init}}(z)$ during the first \SI{8}{s} after valve
-opening (hydrostatic initialization): descending expansion wave, bottom
-reflection, and staircase reverberation of period $2L/a_0$.}
-\label{fig:xt}
-\end{figure}
-
-\subsection{Depressurization and cooling}
-
-\Cref{fig:profiles,fig:histories} show the field profiles and wellhead
-histories over \SI{600}{s}. The column depressurizes nearly uniformly
-(mild top-to-bottom gradient sustained by the discharge plus the
-hydrostatic head), the velocity profile is linear in $z$ --- the
-signature of spatially uniform expansion --- with superposed decaying
-acoustic oscillations, and the discharge remains choked for the entire
-interval shown. Expansion work cools the inventory continuously; by
-$t = \SI{600}{s}$ the wellhead fluid reaches \SI{127}{K}, i.e.\
-essentially the critical temperature of nitrogen (\SI{126.2}{K}).
-
-Two implications follow. First, the ideal-gas closure is increasingly
-strained precisely where the blowdown terminates, quantifying the need
-for the real-fluid property stage. Second, CO$_2$ under comparable
-conditions would intersect its saturation locus far earlier in the
-transient, so phase appearance is an expected feature, not an edge case,
-of the CO$_2$ extension. In physical wells, heat ingress from the
-completion and formation partially offsets this cooling, which is the
-motivation for the conjugate thermal model of the next phase; a
-prescribed-wall-temperature benchmark (Dittus--Boelter coupling,
-$T_w = \SI{300}{K}$) indicates the magnitude of that offset.
-
-\begin{figure}[htb]
-\centering
-\includegraphics[width=\textwidth]{blowdown_profiles.png}
-\caption{Axial profiles of pressure, temperature, density, and velocity
-at \SI{100}{s} intervals during the baseline blowdown.}
-\label{fig:profiles}
-\end{figure}
-
-\begin{figure}[htb]
-\centering
-\includegraphics[width=\textwidth]{blowdown_histories.png}
-\caption{Wellhead mass flow rate, mass inventory, and wellhead fluid
-temperature during the baseline blowdown.}
-\label{fig:histories}
-\end{figure}
+Four radial thermal boundary treatments are implemented, forming a
+verification hierarchy:
+\begin{enumerate}
+\item \emph{adiabatic}, $q_w'' = 0$: the fluid-dynamic reference; it
+bounds the expansion cooling from below (coldest case) and is retained
+as the limiting/sensitivity case, not as a physical model of the
+facility;
+\item \emph{prescribed wall temperature}, $q_w'' = h\,(T_w - T)$ with
+$h$ from the Dittus--Boelter correlation (\cref{sec:correlations}):
+bounds the heat ingress from above (the wall never cools) and provides
+a closed-form check on the convective coupling;
+\item \emph{prescribed heat flux}: completes the hierarchy (used in
+code verification of the source term);
+\item \emph{conjugate completion--formation coupling}
+(\cref{sec:thermal}): the preferred physical model, in which
+$q_w''$ \emph{emerges} from the coupled transient solution.
+\end{enumerate}
+The coupled formulation is preferred for a physical reason, not a
+formal one: the wall heat flux during blowdown is controlled by the
+transient depletion of heat stored in the casing, cement, and
+near-well formation, with the air-filled annulus as the dominant
+resistance (\cref{sec:results-thermal}); no prescribed-$T_w$ or
+prescribed-flux model can represent that depletion a priori, because
+the flux history depends on the very cooling it mitigates. Levels 1--3
+are retained because they bracket the answer and isolate individual
+couplings for verification.
 
 %=============================================================
 \section{Conjugate completion--formation heat transfer}
@@ -478,18 +945,23 @@ temperature during the baseline blowdown.}
 \subsection{Radial thermal network}
 
 The conjugate model attaches to every axial cell $j$ a one-dimensional
-radial thermal network representing the concentric completion of the LSU
-CO$_2$ research well over its upper \SI{2000}{ft}
-(\cref{tab:stack}). Only the 7-5/8\,in inner casing contains the
-pressurized fluid; the annulus between the 7-5/8\,in and 13-3/8\,in
-casings is air-filled, and the outer annuli are cemented to surface. The
-30\,in conductor (upper $\sim$\SI{150}{ft} only) is neglected.
+radial thermal network representing the concentric completion of the
+LSU \co\ research well over its upper \SI{2000}{ft} (\cref{tab:stack}).
+Only the 7-5/8\,in inner casing contains the pressurized fluid; the
+annulus between the 7-5/8\,in and 13-3/8\,in casings is air-filled, and
+the outer annuli are cemented to surface. The 30\,in conductor (upper
+${\sim}\SI{150}{ft}$ only) is neglected. Axial conduction in the
+solids is neglected (axial temperature gradients are
+$\mathcal{O}(\SI{0.05}{K/m})$ against radial gradients of
+$\mathcal{O}(\SI{100}{K/m})$ across the annulus).
 
 \begin{table}[htb]
 \centering
 \caption{Radial stack (upper \SI{2000}{ft}; radii from the casing table
 and API wall thicknesses: 7-5/8\,in 35.8\,lb/ft, 13-3/8\,in 72\,lb/ft,
-20\,in 133\,lb/ft; 26\,in borehole). All properties are parameters.}
+20\,in 133\,lb/ft; 26\,in borehole). All properties are adjustable
+parameters; the formation is Gulf-Coast sediment
+($\rho = \SI{2300}{kg/m^3}$, $c_p = \SI{1000}{J/(kg.K)}$).}
 \label{tab:stack}
 \begin{tabular}{llll}
 \toprule
@@ -497,7 +969,7 @@ Region & $r_{\mathrm{in}} \to r_{\mathrm{out}}$ [mm] & Model & $k$ [\si{W/(m.K)}
 \midrule
 Fluid bore & $0 \to 85.2$ & 1-D flow; Dittus--Boelter $h$ & ---\\
 7-5/8\,in CRA casing & $85.2 \to 96.8$ & capacitive shell & 19\\
-Air annulus & $96.8 \to 156.8$ & nonlinear conductance & Eq.~\eqref{eq:keff}\\
+Air annulus & $96.8 \to 156.8$ & nonlinear conductance & \cref{eq:keff}\\
 13-3/8\,in casing & $156.8 \to 169.9$ & capacitive shell & 45\\
 Cement & $169.9 \to 237.9$ & capacitive shells & 0.9\\
 20\,in casing & $237.9 \to 254.0$ & capacitive shell & 45\\
@@ -519,18 +991,69 @@ C_i'\,\frac{dT_i}{dt} =
 \end{equation}
 with the fluid coupling at the innermost node through the series
 conductance of the convective film and the inner half-shell,
-$G_f' = \left[\,1/(2\pi r_1 h) + R'_{\mathrm{half}}\,\right]^{-1}$, $h$
-from Dittus--Boelter with a laminar floor ($\mathrm{Nu} \ge 3.66$), and
+$G_f' = \left[\,1/(2\pi r_1 h) + R'_{\mathrm{half}}\,\right]^{-1}$, and
 the outer boundary held at the undisturbed geothermal temperature
-$T_{\mathrm{geo}}(z) = T_s + \Gamma\,(L - z)$ (defaults \SI{294.3}{K},
-\SI{25.5}{K/km}). For blowdown time scales the rock penetration depth
-$\sqrt{\alpha t}$ is of order centimeters, so the far-field radius of
-\SI{5}{m} is generous.
+$T_{\mathrm{geo}}(\zeta) = T_s + \Gamma\,\zeta$ --- the \emph{same}
+profile used to initialize the fluid column in the geothermal cases, so
+fluid, completion, and formation start in mutual equilibrium and the
+initial wall heat flux is identically zero. For blowdown time scales
+the rock thermal penetration depth $\sqrt{\alpha t}$ is of order
+centimeters ($\alpha = k/\rho c_p \approx \SI{9e-7}{m^2/s}$,
+$\sqrt{\alpha t} \approx \SI{6}{cm}$ at one hour), so the \SI{5}{m}
+far-field radius is generous by two orders of magnitude and the
+far-field boundary condition (fixed $T_{\mathrm{geo}}$) cannot
+influence the solution on these time scales. The formation shells are
+logarithmically spaced to resolve the near-wellbore gradient.
 
-\paragraph{Air annulus.} The gas-filled annulus is treated as a massless
+The wellbore/formation heat flux is computed as part of the coupled
+solution rather than prescribed because it is the \emph{answer}, not
+an input: during blowdown the flux is set by the competition between
+the cooling rate of the fluid (which depends on the discharge) and the
+depletion rate of heat stored in the completion (which depends on the
+flux history). Any prescribed-flux or prescribed-temperature closure
+presupposes that history.
+
+\subsection{Empirical correlations: documentation}
+\label{sec:correlations}
+
+\paragraph{Fluid-side convection: Dittus--Boelter.} The convective
+coefficient on the casing inner surface is
+\begin{equation}
+\mathrm{Nu} = \max\!\left(0.023\,\mathrm{Re}^{0.8}\mathrm{Pr}^{0.4},
+\; 3.66\right),
+\qquad h = \mathrm{Nu}\,k_{\mathrm{fluid}}/D,
+\label{eq:db}
+\end{equation}
+the classical \citet{dittus1930} form (heating exponent $0.4$; see
+\citet{winterton1998} for the equation's provenance), with a laminar
+floor at the constant-wall-temperature fully developed value
+$\mathrm{Nu} = 3.66$ so that $h$ remains physical as $u \to 0$
+(closed well, end of blowdown). Nominal validity:
+$\mathrm{Re} \gtrsim 10^4$, $0.7 \le \mathrm{Pr} \le 160$, fully
+developed pipe flow, moderate property variation. During the campaign
+discharges $\mathrm{Re}$ ranges from $\mathcal{O}(10^6)$ (early) down
+through the transitional regime (late), so the correlation is
+extrapolated through transition by the $\max(\cdot)$ switch ---
+a documented approximation. Dittus--Boelter was selected over the more
+accurate \citet{gnielinski1976} correlation (which covers
+$3\times10^3 < \mathrm{Re} < 5\times10^6$ with friction-factor
+coupling) because the fluid-side film is \emph{not} a controlling
+resistance here: it carries ${\sim}\SI{3}{K}$ of the
+${\sim}\SI{11}{K}$ total fluid-to-formation difference
+(\cref{sec:results-thermal}), so the ${\sim}20\,\%$ accuracy
+difference between the two correlations perturbs the heat flux by only
+a few percent --- below the uncertainty of the air-annulus closure.
+The Prandtl numbers and viscosities entering \cref{eq:db} are constant
+gas-phase reference values ($\mathrm{Pr} = 0.72$/$0.78$,
+$\mu = 1.8/1.5\times10^{-5}\,\si{Pa.s}$ for N$_2$/\co); the energy
+equation itself never uses these transport constants.
+
+\paragraph{Air annulus: Willhite's effective conductivity.} The
+gas-filled 7-5/8$\times$13-3/8\,in annulus is treated as a massless
 nonlinear conductance following the standard wellbore treatment of
-\citet{willhite1967}: natural convection through an effective
-conductivity from the Dropkin--Somerscales correlation,
+\citet{willhite1967}: natural convection enters through an effective
+conductivity from the Dropkin--Somerscales correlation
+\citep{dropkin1965},
 \begin{equation}
 k_{\mathrm{eff}} = \max\!\left[\,k_{\mathrm{air}},\;
 0.049\,(\mathrm{Gr}\,\mathrm{Pr})^{1/3}\,\mathrm{Pr}^{0.074}\,
@@ -539,156 +1062,906 @@ k_{\mathrm{air}}\right],
 \mathrm{Gr} = \frac{g\,\beta\,\Delta T\,(r_o - r_i)^3}{\nu^2},
 \label{eq:keff}
 \end{equation}
-in parallel with gray-surface radiation between concentric cylinders
-($\varepsilon = 0.8$ on both surfaces, linearized conductance
-$2\pi r_i\,\sigma F\,(T_i^2 + T_o^2)(T_i + T_o)$ with the standard
-two-surface view factor $F$). The conductance is re-evaluated every time
-step from the current surface temperatures (coefficient lagging), which
-keeps the implicit solve linear.
+in parallel with gray-surface radiation between concentric cylinders:
+linearized conductance per unit length
+$2\pi r_i\,\sigma F\,(T_i^2 + T_o^2)(T_i + T_o)$ with the two-surface
+view factor
+$F = \left[1/\varepsilon_i + (r_i/r_o)(1/\varepsilon_o - 1)
+\right]^{-1}$ and $\varepsilon_i = \varepsilon_o = 0.8$ (oxidized
+steel). The Dropkin--Somerscales correlation was developed for
+enclosed natural convection at high Rayleigh number and is the closure
+recommended by \citet{willhite1967} for casing annuli --- the
+standard of wellbore thermal engineering since --- which is the basis
+for its selection; its nominal range
+($5\times10^4 < \mathrm{Gr\,Pr} < 7.17\times10^8$) comfortably
+contains the annulus conditions here
+($\mathrm{Gr\,Pr} \sim 10^6$--$10^7$ for $\Delta T \sim 1$--
+\SI{10}{K} across a \SI{60}{mm} gap). The $1/3$-power makes
+$k_{\mathrm{eff}}$ gap-width independent, which limits sensitivity to
+the exact annular geometry. The conductance is re-evaluated every
+time step from the current surface temperatures (coefficient
+lagging), keeping the implicit radial solve linear. Because the
+annulus is the dominant solid-side resistance
+(\cref{sec:results-thermal}), this closure is the leading-order
+empirical sensitivity of the entire thermal model: if the annulus
+fluid, pressure, or emissivities of the facility differ from the
+assumed air/0.8 values, this term --- not the formation conductivity
+or the film coefficient --- is where the model should be recalibrated.
+
+\paragraph{Formation conduction.} Pure transient conduction with
+constant properties ($k = \SI{2.1}{W/(m.K)}$,
+$\rho c_p = \SI{2.3e6}{J/(m^3.K)}$, representative of water-saturated
+Gulf-Coast sediments); no empirical correlation is involved, and the
+discretization is verified against an independent reference solution
+(\cref{sec:vv-thermal}).
 
 \subsection{Solution procedure and coupling}
 
 The networks are advanced once per flow time step with backward Euler;
 each axial cell requires one tridiagonal (Thomas) solve, vectorized
-across cells. The fluid temperature enters the solid solve explicitly,
-while the heat flux returned to the wellbore energy equation,
+across all cells. The fluid temperature enters the solid solve
+explicitly, while the heat flux returned to the wellbore energy
+equation,
 \begin{equation}
 q_w'' = \frac{G_f'\,\left(T_1^{\,n+1} - T_f\right)}{2\pi r_1},
 \end{equation}
-uses the \emph{implicit} wall temperature through the same conductance.
-The energy delivered by the fluid source term in \cref{eq:energy} is
-therefore exactly the energy absorbed by the network, and the global
-budget of \cref{eq:budget}, extended by the wall-heat integral
-$\int \sum_j q_w'' \pi D\,\Delta z\,dt$, continues to close to machine
-precision in the conjugate case.
+uses the \emph{implicit} wall temperature through the same
+conductance. The energy delivered by the fluid source term in
+\cref{eq:energy} is therefore exactly the energy absorbed by the
+network, and the global budget of \cref{eq:budget}, extended by the
+wall-heat integral $\int \sum_j q_w''\,\pi D\,\Delta z\,dt$, continues
+to close to machine precision in the conjugate case.
 
-\subsection{Verification}
+%=============================================================
+\section{Numerical method}
+%=============================================================
+\label{sec:numerics}
 
-Four tests establish the thermal model (all automated in the regression
-suite):
-\begin{enumerate}
-\item \emph{Steady state:} with constant fluid and far-field
-temperatures, the converged heat flow is identical across every radial
-interface (series-resistance consistency) to $10^{-6}$ relative.
-\item \emph{Energy conservation:} with an insulated outer boundary, the
-heat absorbed from the fluid equals the change of stored network energy
-to $10^{-10}$ (backward Euler is exactly conservative).
-\item \emph{Transient conduction:} a formation-only network driven by a
-constant wall temperature reproduces the constant-temperature-cylinder
-solution to better than \SI{1}{\percent} over
-$\tau = \alpha t/r_w^2 \in [10, 1000]$, where the reference is an
-independent Crank--Nicolson solution on a 6000-node logarithmic-radial
-grid. A methodological finding is recorded here explicitly: three
-convenient references were tried first and all proved inadequate --- the
-leading-order logarithmic asymptote is 8--15\,\% in error over this
-$\tau$ range; Ramey-type dimensionless-temperature correlations
+\subsection{Finite-volume discretization and HLLC flux}
+
+Equations \eqref{eq:mass}--\eqref{eq:energy} are discretized on $N$
+uniform cells of width $\Delta z = L/N$ in conservative finite-volume
+form,
+\begin{equation}
+\mathbf{V}_j^{n+1} = \mathbf{V}_j^{n}
+ - \frac{\Delta t}{\Delta z}\left(\mathbf{F}_{j+1/2} -
+ \mathbf{F}_{j-1/2}\right) + \Delta t\, \mathbf{S}_j,
+\end{equation}
+with interface fluxes from the HLLC approximate Riemann solver
+\citep{toro1994,toro2009}. HLLC restores the contact wave omitted by
+HLL --- immaterial for the smooth blowdown interior but retained for
+consistency with the shock-capturing benchmarks and for robustness in
+later two-phase extensions. For the ideal gas the wave-speed estimates
+are the standard pressure-based ones of \citet{toro2009}; for the
+general EOS they are the direct bounds of
+\citet{davis1988} and \citet{einfeldt1988},
+$S_L = \min(u_L - a_L,\, u_R - a_R)$,
+$S_R = \max(u_L + a_L,\, u_R + a_R)$, which require no auxiliary
+thermodynamic evaluations; the HLLC star states are built from the
+face triples $(\rho, u, p, e, a)$ without any EOS call inside the
+flux, so the Riemann solver itself is EOS-agnostic.
+
+\subsection{Reconstruction and predictor}
+
+Second-order accuracy in space and time is obtained with the
+MUSCL--Hancock scheme: primitive variables $(\rho, u, p)$ are
+reconstructed with van~Leer-limited slopes \citep{vanleer1984}, and
+the half-step predictor advances the face states with the primitive
+form of the equations, the pressure predictor using the coefficient
+$\rho a^2 = \rho\,(\partial p/\partial\rho)_s$ --- which equals
+$\gamma p$ for the ideal gas and is its correct generalization for an
+arbitrary EOS. Gravity is included in the velocity predictor
+($-g\,\Delta t/2$), maintaining formal second order for the
+gravitational dynamics.
+
+For the real fluid, two additional primitives are reconstructed and
+advanced: the internal energy $e$ (predictor
+$\dot e = -u\,\partial_z e - (p/\rho)\,\partial_z u$) and the sound
+speed $a$ (slope-limited, no predictor). This avoids per-face EOS
+inversions entirely; the price is an $\mathcal{O}(\Delta z^2)$
+thermodynamic mismatch of the independently reconstructed face triple
+$(\rho, p, e)$, which is standard practice for real-gas MUSCL schemes
+and converges away with the scheme's own truncation error.
+
+\subsection{Source-term treatment and energy consistency}
+\label{sec:sources}
+
+The momentum sources (gravity, friction) and the energy source (wall
+heat) are advanced with a Heun (trapezoidal) corrector with the wall
+heat flux held fixed over the step (one thermal-network solve per
+step). The gravitational \emph{work} term in \cref{eq:energy} requires
+care: evaluating it as $-\rho_j u_j g$ at cell centers leaves a
+residual in the discrete energy budget that does \emph{not} converge
+with mesh or time-step refinement, because the potential-energy
+inventory evolves according to the \emph{face} mass fluxes while the
+work term samples cell-centered momenta. The term is therefore
+discretized in the energy-consistent face-flux form
+\begin{equation}
+\left(-\rho u g\right)_j \;\longrightarrow\;
+ -\,g\,\frac{F^{\rho}_{j-1/2} + F^{\rho}_{j+1/2}}{2},
+\label{eq:gravwork}
+\end{equation}
+where $F^{\rho}$ denotes the time-centered HLLC mass flux. With
+\cref{eq:gravwork} the discrete budget
+\begin{equation}
+\sum_j \left(E_j + \rho_j g z_j\right) A\,\Delta z
+\;+\; \int_0^t \mdot\,\left(h_0 + gL\right)\,dt'
+\;-\; \int_0^t\!\! \sum_j q_w''\,\pi D\,\Delta z\;dt'
+\;=\; \text{const}
+\label{eq:budget}
+\end{equation}
+telescopes exactly (machine precision), where $h_0 = (E_f + p_f)/
+\rho_f$ is the stagnation enthalpy of the effluent evaluated from the
+face flux itself --- a bookkeeping identity exact for \emph{any} EOS.
+This discovery path (cell-centered form, $\mathcal{O}(10^{-4})$
+non-convergent residual, face-flux repair) is recorded because budget
+closure is used throughout this report as a primary verification
+instrument, and its integrity depends on this detail.
+
+\subsection{Time stepping, caching, and stopping criteria}
+
+Time integration is explicit under
+$\Delta t = \mathrm{CFL}\,\Delta z / \max_j\left(|u_j| + a_j\right)$
+with $\mathrm{CFL} = 0.8$ unless stated otherwise. For the ideal-gas
+path the choke boundary may be recomputed on a stride (default 1); for
+the real fluid the demand/supply split of \cref{sec:split} applies
+and the supply side is per-step by construction. A run terminates on:
+(i)~reaching $t_{\mathrm{end}}$; (ii)~in-wellbore dome entry
+(\cref{sec:monitor}), with the flagged report; or (iii)~a positivity
+failure of $(\rho, p)$, which raises immediately --- no positivity
+``fixes'' are applied, so a failure of the fluid-dynamic solver is
+visible as such rather than masked (none occurred in any run reported
+here). Grid resolution is $N = 300$ for the hour-long campaign cases
+and $N = 600$ for the short wave-resolution runs; the grid study of
+\cref{sec:vv-solution} quantifies the residual discretization error.
+
+\subsection{Summary of modifications for the real fluid}
+
+Moving from ideal-gas nitrogen to real-fluid \co\ changed the solver
+in exactly five places, all behind the property interface:
+(i)~$(\rho,e)\to(p,T,a)$ served by the tabulated closure
+(\cref{sec:tables}); (ii)~reconstruction of $e$ and $a$ as additional
+primitives with the $\rho a^2$ pressure predictor; (iii)~Davis/Einfeldt
+wave speeds in the HLLC flux; (iv)~the choke demand from the real-gas
+HEM maximization with the demand/supply split (\cref{sec:split});
+(v)~the per-step saturation monitor. The source terms, the bottom
+boundary, the thermal coupling, and the budget machinery required no
+modification --- the budget identity $h_0 = (E_f+p_f)/\rho_f$ holds
+for any EOS.
+
+%=============================================================
+\section{Verification and validation}
+%=============================================================
+\label{sec:vv}
+
+Verification and validation are organized following the usual
+separation: \emph{code verification} (is the discretization solving
+the equations correctly?), \emph{solution verification} (are the
+reported solutions numerically converged?), and \emph{validation /
+model benchmarks} (do the models reproduce independent references and
+known limits?). All tests below are automated in the regression suite
+(42 tests at the time of writing) except where noted; acceptance
+thresholds are stated with each test.
+
+\subsection{Code verification}
+\label{sec:vv-code}
+
+\paragraph{Shock-tube benchmark.} The HLLC/MUSCL--Hancock kernel was
+verified on the single-phase shock tube of \citet{gessner2010} (air;
+\SI{500}{kPa}, \SI{400}{K} / \SI{100}{kPa}, \SI{300}{K}; 4000 cells)
+against the exact Riemann solution. \Cref{tab:shocktube} summarizes
+mean absolute errors: first-order Godunov already matches the best
+legacy SCMM variant, and MUSCL--Hancock improves on it by an order of
+magnitude at $\sim$1\,\% of the legacy cost, with discrete
+conservation to machine precision. The HLLC flux is indistinguishable
+from the exact Riemann flux on this problem. Acceptance: reproduction
+of the thesis error table for the SCMM reconstruction (achieved within
+the differences attributable to compiler arithmetic, cf.\ parenthetical
+values), and monotone improvement for the FV schemes.
+
+\begin{table}[htb]
+\centering
+\caption{Single-phase shock-tube benchmark at $t=\SI{3}{ms}$: mean
+absolute errors against the exact solution (4001 nodes / 4000 cells).
+SCMM rows: Python reconstruction of \citet{gessner2010}; thesis values
+in parentheses.}
+\label{tab:shocktube}
+\begin{tabular}{lccccc}
+\toprule
+Scheme & $p$ [\si{Pa}] & $u$ [\si{m/s}] & $\rho$ [\si{kg/m^3}] & $T$ [\si{K}] & Wall time [\si{s}]\\
+\midrule
+SCMM non-cons., 2nd order & 3027 (2713) & 4.29 & 0.0230 & 2.02 & 186\\
+SCMM conservative, 2nd order & 383 (312) & 0.44 & 0.0041 & 0.35 & 399\\
+FV first order, HLLC & 316 & 0.28 & 0.0041 & 0.41 & 1.4\\
+FV MUSCL--Hancock, HLLC & 34.9 & 0.040 & 0.00057 & 0.065 & 2.0\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Conservation audits.} For every discharging case reported
+in this document --- both fluids, all thermal models, all
+initializations --- the mass balance
+$M(t) + \int_0^t \mdot\,dt' = M(0)$ and the energy balance
+\cref{eq:budget} close to relative errors of
+$\mathcal{O}(10^{-16}$--$10^{-12})$ (the individual values are listed
+with the campaign summary, \cref{tab:cases}). Acceptance: $<10^{-12}$.
+This is the test that exposed the cell-centered gravitational-work
+defect (\cref{sec:sources}) and the ghost-cell wall leak
+(\cref{sec:bc-bottom}) during development.
+
+\paragraph{Hydrostatic stationarity.} \Cref{sec:stationarity} and
+\cref{tab:static}: residual velocities of $\mathcal{O}(\si{cm/s})$,
+first-order convergent, and pressure drift $<10^{-3}$ relative over
+\SI{600}{s} of closed-well integration, for both EOS types and both
+temperature profiles.
+
+\paragraph{Thermal-network verification.} Four tests establish the
+radial model: (i)~\emph{steady state}: with constant fluid and
+far-field temperatures the converged heat flow is identical across
+every radial interface to $10^{-6}$ relative (series-resistance
+consistency); (ii)~\emph{energy conservation}: with an insulated
+outer boundary, heat absorbed from the fluid equals the change of
+stored network energy to $10^{-10}$ (backward Euler is exactly
+conservative); (iii)~\emph{transient conduction}: a formation-only
+network driven by a constant wall temperature reproduces the
+constant-temperature-cylinder solution to better than
+0.5\,\% over dimensionless times
+$\tau = \alpha t/r_w^2 \in [10, 1000]$, the reference being an
+independent Crank--Nicolson solution on a 6000-node logarithmic
+radial grid; (iv)~\emph{radial grid convergence} of $q_w''(t)$:
+$<2\,\%$ change from 16 to 32 formation shells.
+\label{sec:vv-thermal}
+
+A methodological finding is recorded explicitly: three convenient
+references were tried first for test (iii) and all proved inadequate
+--- the leading-order logarithmic asymptote is 8--15\,\% in error over
+this $\tau$ range; Ramey-type dimensionless-temperature correlations
 \citep{ramey1962,hasan1991} address the constant-\emph{flux} boundary
-condition rather than constant temperature; and naive quadrature of the
-exact Carslaw--Jaeger integral \citep{carslaw1959} mis-handles the
+condition rather than constant temperature; and naive quadrature of
+the exact Carslaw--Jaeger integral \citep{carslaw1959} mishandles the
 singular $u \to 0$ region of the integrand that dominates at large
 $\tau$. The network initially appeared 3--7\,\% ``in error'' against
-these references; the independent finite-difference solution showed the
-network to be accurate to \SI{0.3}{\percent} and the references to be at
-fault.
-\item \emph{Radial grid convergence} of $q_w''(t)$ under refinement of
-the formation discretization (deviation $<\SI{2}{\percent}$ at 16
-shells against 32).
-\end{enumerate}
+these references; the independent finite-difference solution showed
+the network to be accurate to 0.3\,\% and the references to be at
+fault. The hardcoded reference constants now carry their provenance
+in the test source.
 
-\subsection{Results: thermal-model hierarchy}
+\paragraph{Real-fluid property closure.} \Cref{sec:tables}: tabulated
+$(\rho,e)\to(p,T,a)$ closure versus direct Span--Wagner evaluation at
+200 random gas-phase states --- maximum relative errors
+$5\times10^{-5}$ ($p$), $1\times10^{-5}$ ($T$), $6\times10^{-6}$
+($a$); acceptance $10^{-3}$. Thermodynamic consistency of the sound
+speed: tabulated $a$ versus finite differences of $(\partial
+p/\partial\rho)_s$ along CoolProp isentropes at three states ---
+agreement within 0.2\,\%.
 
-\Cref{fig:hierarchy} compares the three thermal levels on the actual
-well geometry (bore ID \SI{170.3}{mm}, 12.7\,mm choke, otherwise the
-baseline case) over \SI{1800}{s}. The outcome is not a small correction:
-heat ingress from the completion and formation nearly suppresses the
-expansion cooling. The minimum wellhead fluid temperature is
-\SI{283.6}{K} for the coupled model and \SI{290.2}{K} for the
-prescribed-$T_w$ benchmark, against \SI{124.0}{K} for the adiabatic
-wall. The warmer inventory sustains a higher pressure at equal mass, so
-the heated cases also discharge measurably faster.
+\subsection{Solution verification}
+\label{sec:vv-solution}
+
+\paragraph{Axial grid.} For the \SI{13.79}{MPa} nitrogen baseline over
+the first \SI{60}{s}, the maximum relative deviation of $\mdot(t)$
+from an 800-cell reference is 2.6\,\% (100 cells), 0.88\,\% (200), and
+0.26\,\% (400); the campaign grid of $N=300$ sits between the latter
+two. The early-wave acoustic structures of \cref{sec:velocity} were
+additionally confirmed grid-converged by comparing peak perturbation
+velocities at 200/400/1200 cells (1.18/1.20/\SI{1.21}{m/s}).
+
+\paragraph{Time step.} Reducing CFL from 0.9 to 0.5 and 0.2 changes
+$\mdot(t)$ by at most 0.6\,\% and 1.2\,\% respectively (the slight
+increase at small CFL reflects accumulated first-order source-split
+error over more steps, not instability).
+
+\paragraph{Choke demand caching.} The 0.2\,\% demand-refresh
+tolerance of \cref{sec:split} was verified against per-step demand
+recomputation on a short run: $\mdot(t)$ differences below 0.05\,\%.
+
+\subsection{Validation and model benchmarks}
+\label{sec:vv-model}
+
+\paragraph{Quasi-static lumped-vessel limit.} With gravity
+deactivated, the 1-D solution must approach the zero-dimensional
+adiabatic-vessel model (isentropic residual gas, quasi-steady orifice
+discharge) whenever the acoustic transit time $L/a_0 \approx
+\SI{1.7}{s}$ is small against the discharge time scale
+($\approx\SI{200}{s}$, baseline choke). \Cref{fig:vessel}: maximum
+relative deviations 0.9\,\% ($p$) and 0.8\,\% ($\mdot$) after the
+initial wave transient. With larger chokes the \emph{wellhead}
+pressure sits several percent below the column mean --- a genuine 1-D
+effect of sustained expansion toward the choke --- while the mass
+inventory continues to track the lumped model to 0.5\,\%. The
+vessel comparison is run on the \emph{mass inventory}, not the
+wellhead pressure, precisely because the latter legitimately deviates.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{blowdown_vs_vessel_ode.png}
+\caption{Validation against the lumped adiabatic-vessel ODE (gravity
+off): wellhead pressure, mass flow rate, and mass inventory.}
+\label{fig:vessel}
+\end{figure}
+
+\paragraph{Choke-flow limits.}
+\label{sec:vv-choke}
+(i)~\emph{Ideal-gas recovery}: the real-gas \co\ critical flux at
+\SI{0.3}{MPa}/\SI{300}{K} ($Z \approx 0.99$) matches the ideal-gas
+formula within 1\,\% (measured $+0.9\,\%$; acceptance 4\,\%).
+(ii)~\emph{Real-gas enhancement}: at \SI{5}{MPa}/\SI{300}{K}
+($Z=0.69$) the HEM critical flux is $1.17\times$ the ideal value,
+within the expected $\sqrt{\rho_0 p_0}$-scaling band (test bounds
+1.05--1.5). (iii)~\emph{HEM versus single-phase bound}: $+1.4\,\%$ at
+the same state with throat quality $x_t = 0.975$; the HEM result
+reduces \emph{exactly} to the single-phase result for stagnation
+states whose sonic point is dry (verified at \SI{330}{K}).
+(iv)~\emph{Choke-area limiting behavior}: a bore sweep from 1/4\,in to
+the open-pipe limit gives initial mass flow rates scaling with throat
+area (0.84/3.32/12.9/\SI{46.6}{kg/s}, open pipe \SI{143}{kg/s}),
+monotonic and stable through the transition to pipe-side choking
+(\cref{fig:choke}). (v)~\emph{Discharge-coefficient scaling}:
+$\mdot \propto C_d$ and blowdown time $\propto 1/C_d$ per
+\cref{sec:cd}. (vi)~\emph{HEM literature position}: no facility
+\co\ critical-flow data are yet available for direct validation; the
+HEM formulation itself is the standard equilibrium bound whose
+relation to short-orifice data (underprediction, recovered by
+non-equilibrium corrections) is documented in
+\citet{starkman1964,henry1971,leung1986}, and the present
+implementation's limiting behaviors --- (i), (iii) --- are the
+machine-checkable content. Facility blowdown data, when available,
+will calibrate $C_d$ first (\cref{sec:cd}).
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.72\textwidth]{blowdown_choke_sweep.png}
+\caption{Choke-bore sweep from 1/4\,in to the open-pipe limit:
+wellhead mass flow rate.}
+\label{fig:choke}
+\end{figure}
+
+\paragraph{Full-system cross checks.} (i)~\emph{Low-pressure
+real/ideal blowdown}: the complete real-fluid solver at
+\SI{0.5}{MPa} ($Z \approx 0.98$) agrees with an ideal-gas \co\ model
+($R = \SI{188.92}{J/(kg.K)}$, $\gamma = 1.289$) in $\mdot(t)$ within
+5\,\%. (ii)~\emph{Nitrogen through the general path}: real-fluid
+\emph{nitrogen} (CoolProp) run through the full general-EOS code path
+--- tables, general reconstruction, Davis speeds, split choke ---
+agrees with the validated ideal-gas path within 5\,\% in $\mdot(t)$
+with machine-precision budgets; this is the test that isolates the
+general-path machinery from \co\ physics, and the one that exonerated
+the solver during the boundary-caching investigation
+(\cref{sec:split}). (iii)~\emph{Dome-entry flagging}: a
+deliberately marginal case (uniform \SI{6.5}{MPa}, initial superheat
+$\approx\SI{1.9}{K}$) stops within a second of simulated time with a
+complete, correctly located first-entry report.
+
+%=============================================================
+\section{Results and physical interpretation}
+%=============================================================
+\label{sec:results}
+
+\subsection{Baseline: adiabatic nitrogen blowdown at 13.79 MPa}
+\label{sec:results-n2}
+
+The original nitrogen baseline (uniform \SI{300}{K}, hydrostatic,
+\SI{13.79}{MPa}, adiabatic, $D = \SI{0.1}{m}$) is retained unchanged.
+\Cref{fig:xt} shows the $x$--$t$ diagram of the pressure perturbation
+during the first \SI{8}{s}: opening the choke launches an expansion
+wave that descends at the sound speed, reaches bottom at
+$t = L/a_0 \approx \SI{1.7}{s}$, reflects, and returns at
+$2L/a_0 \approx \SI{3.4}{s}$; because the choke passes only a small
+fraction of the sonic pipe flux, the wellhead acts as a nearly closed
+end and the wave re-reflects as an expansion, producing a staircase
+depressurization of period $2L/a_0$ with steps of
+$\mathcal{O}(\SI{130}{kPa})$. The initial wave is weak relative to
+the inventory ($\rho a\,\Delta u \sim \SI{150}{kPa}$ against
+\SI{13.79}{MPa}) and the subsequent discharge is quasi-static,
+consistent with the lumped-vessel agreement of \cref{sec:vv-model}.
+\Cref{fig:profiles,fig:histories} show the field evolution: the
+column depressurizes nearly uniformly, the velocity profile is linear
+in $z$ --- the signature of spatially uniform expansion --- with
+superposed decaying acoustic oscillations, and expansion work cools
+the inventory to \SI{127}{K} by \SI{600}{s}, essentially the nitrogen
+critical temperature; the ideal-gas closure is thus increasingly
+strained exactly where the adiabatic blowdown ends, one motivation
+for the real-fluid stage.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.8\textwidth]{blowdown_xt.png}
+\caption{$x$--$t$ diagram of the pressure perturbation
+$p - p_{\mathrm{init}}(z)$ during the first \SI{8}{s} (N$_2$ baseline,
+hydrostatic initialization): descending expansion wave, bottom
+reflection, staircase reverberation of period $2L/a_0$.}
+\label{fig:xt}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{blowdown_profiles.png}
+\caption{N$_2$ baseline: axial profiles of pressure, temperature,
+density, and velocity at \SI{100}{s} intervals.}
+\label{fig:profiles}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{blowdown_histories.png}
+\caption{N$_2$ baseline: wellhead mass flow rate, inventory, and
+wellhead temperature.}
+\label{fig:histories}
+\end{figure}
+
+\subsection{Thermal-model hierarchy}
+\label{sec:results-thermal}
+
+\Cref{fig:hierarchy} compares the thermal levels on the actual well
+geometry (bore ID \SI{170.3}{mm}, 12.7\,mm choke, N$_2$,
+\SI{13.79}{MPa}) over \SI{1800}{s}. The outcome is not a small
+correction: heat ingress from the completion and formation nearly
+suppresses the expansion cooling --- minimum wellhead temperature
+\SI{283.6}{K} (coupled) and \SI{290.2}{K} (prescribed $T_w$) against
+\SI{124.0}{K} (adiabatic). The warmer inventory sustains a higher
+pressure at equal mass, so the heated cases also discharge measurably
+faster. \Cref{fig:radial} locates the controlling resistances: of the
+total fluid-to-formation temperature difference, roughly \SI{3}{K}
+falls across the convective film, \SI{7}{K} across the air annulus,
+and under \SI{1}{K} across all remaining solids; the formation beyond
+the cement is essentially undisturbed after \SI{30}{min}. Two
+consequences: the air-annulus closure \cref{eq:keff} is the
+leading-order empirical sensitivity of the thermal model
+(\cref{sec:correlations}); and the near-isothermal outcome is
+specific to slow (choke-controlled, $\sim$tens of minutes)
+discharge --- larger chokes shorten the residence time relative to
+the thermal response and shift the behavior back toward the adiabatic
+limit.
 
 \begin{figure}[htb]
 \centering
 \includegraphics[width=\textwidth]{thermal_hierarchy.png}
-\caption{Thermal-model hierarchy on the LSU well geometry (N$_2$,
-\SI{13.79}{\mega\pascal}/\SI{300}{K}, 12.7\,mm choke): wellhead fluid
-temperature, mass flow rate, and inventory for the adiabatic,
-prescribed-$T_w$, and coupled formulations.}
+\caption{Thermal-model hierarchy on the LSU geometry (N$_2$,
+\SI{13.79}{MPa}/\SI{300}{K}, 12.7\,mm choke): wellhead temperature,
+mass flow rate, inventory for adiabatic, prescribed-$T_w$, and coupled
+walls.}
 \label{fig:hierarchy}
 \end{figure}
-
-\Cref{fig:radial} locates the controlling resistances: of the total
-fluid-to-formation temperature difference, roughly \SI{3}{K} falls
-across the convective film, \SI{7}{K} across the air annulus, and less
-than \SI{1}{K} across all remaining solids; the formation beyond the
-cement is essentially undisturbed after \SI{30}{min}. Two consequences
-follow. First, the air-annulus closure --- here the
-Willhite/Dropkin--Somerscales treatment, developed for modest gap aspect
-ratios --- is a leading-order sensitivity of the model and merits a
-dedicated assessment if annulus conditions (fluid, pressure,
-emissivities) change. Second, the near-isothermal outcome is specific to
-this slow ($\sim$10\,min) discharge; larger chokes shorten the residence
-time relative to the thermal response and shift the behavior back toward
-the adiabatic limit.
 
 \begin{figure}[htb]
 \centering
 \includegraphics[width=0.8\textwidth]{thermal_radial.png}
-\caption{Radial temperature through the completion and formation at
+\caption{Radial temperature through completion and formation at
 $t = \SI{1800}{s}$ at three depths (coupled model). The dominant
 solid-side temperature drop occurs across the air annulus.}
 \label{fig:radial}
 \end{figure}
 
-\paragraph{Limitations.} The bore is modeled as a clean circle at the
-7-5/8\,in ID; the 2-7/8\,in tubing, injection line, and gauge carriers
-inside the casing are not yet represented hydraulically or thermally.
-Axial conduction in the solids is neglected. Fluid-side transport
-properties are constant (to be revisited for transcritical CO$_2$).
+\subsection{Matched N$_2$/CO$_2$ campaign, uniform 300 K
+initialization}
+\label{sec:results-stage1}
+
+\Cref{fig:cmp-hist} compares both fluids at matched conditions
+(\SI{5}{MPa} wellhead, uniform \SI{300}{K}, hydrostatic, LSU
+geometry, 12.7\,mm choke, $N=300$, \SI{3600}{s}), each with coupled
+and adiabatic walls. The principal quantitative contrasts, with their
+causes:
+\begin{itemize}
+\item \emph{Inventory}: \SI{2064}{kg} of \co\ against \SI{807}{kg}
+of N$_2$ --- a factor 2.56, the product of the molar-mass ratio
+(1.57) and the compressibility loading $1/Z$ at $Z = 0.687$ (1.46,
+with a small hydrostatic correction). Real-gas attraction packs
+substantially more \co\ into the same volume than any ideal estimate.
+\item \emph{Initial discharge}: \SI{1.71}{kg/s} (\co) against
+\SI{1.22}{kg/s} (N$_2$), factor 1.40 --- the critical flux scales as
+$\sqrt{\rho_0 p_0}$, so the density advantage enters only under a
+square root, and the real-gas enhancement (1.17 over ideal \co)
+contributes the rest.
+\item \emph{Blowdown duration}: the ratio of inventory to discharge
+rate, $2.56/1.40 \approx 1.8$, stretches the \co\ blowdown clock
+accordingly (visible in the $M/M_0$ panel); both wells still reach
+${\sim}2\,\%$ inventory within the hour.
+\item \emph{Cooling}: with the coupled wall, minimum wellhead
+temperatures are \SI{288.1}{K} (\co) and \SI{289.4}{K} (N$_2$) ---
+formation heat ingress nearly cancels the expansion cooling for both
+--- but the heat drawn differs strongly: \SI{137.8}{MJ} (\co) against
+\SI{65.2}{MJ} (N$_2$), reflecting the larger mass and the higher
+$c_p$ (${\sim}\SI{1803}{}$ vs ${\sim}\SI{1039}{J/(kg.K)}$ at the
+initial state). Adiabatically, N$_2$ cools freely to \SI{96.7}{K},
+while \co\ never gets the chance (next item).
+\item \emph{Single-phase validity}: the coupled \co\ case remains
+single phase throughout, but barely --- minimum saturation margin
+\SI{3.0}{K}, at the \emph{bottom} of the well. The adiabatic \co\
+case is halted by the monitor at $t = \SI{173}{s}$ (HEM choke; 193~s
+with the earlier single-phase-bound choke) with first dome entry at
+the bottom (\SI{608.6}{m}, \SI{4.863}{MPa}, \SI{286.3}{K}). The
+bottom location is the hydrostatic-margin effect of
+\cref{sec:ic-temperature}: compression raises $T_{\mathrm{sat}}$
+downhole, so the uniform column's thinnest margin is at depth and
+bulk expansion cooling consumes it first.
+\item \emph{Choke flashing}: the uniform-IC \co\ choke is in HEM
+regimes 3--4 from the first instant: throat quality $0.95$--$1.0$ for
+the first \SI{9.6}{min} of the coupled run (then the throat dries),
+and for the entirety of the (shorter) adiabatic run
+(\cref{fig:choke-hem}).
+\end{itemize}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{cmp_histories_uniform.png}
+\caption{Matched N$_2$/\co\ blowdowns, uniform \SI{300}{K}
+hydrostatic initialization: wellhead pressure and temperature, mass
+flow rate, and normalized inventory; coupled (solid) and adiabatic
+(dotted) walls. The adiabatic \co\ curve terminates at the flagged
+dome entry.}
+\label{fig:cmp-hist}
+\end{figure}
+
+\subsection{Approach evaluation: HEM choke and geothermal
+initialization}
+\label{sec:results-stage2}
+
+Two measures against saturation proximity were evaluated at full
+resolution, separately and in combination: the HEM choke
+(\cref{sec:hem-model}) and the geothermal summer initialization
+(\cref{sec:ic-temperature}). \Cref{fig:margin-zt} maps the saturation
+margin field $m(z,t)$ for the four \co\ cases;
+\cref{fig:min-margin} tracks its minimum and the depth at which the
+minimum occurs; \cref{fig:sat-paths} shows the corresponding $p$--$T$
+trajectories against the saturation curve; \cref{fig:choke-hem} shows
+the HEM choke behavior. The outcome:
+\begin{enumerate}
+\item \emph{Uniform \SI{300}{K}, coupled}: single phase for the full
+hour with minimum margin \SI{2.84}{K} at the bottom at
+$t = \SI{482}{s}$; the choke flashes for the first \SI{9.6}{min}.
+Workable, but the margin is thin and entirely owed to formation heat
+ingress.
+\item \emph{Uniform \SI{300}{K}, adiabatic}: dome entry at
+\SI{173}{s} at the bottom. Flagged and halted.
+\item \emph{Geothermal, coupled} --- the preferred configuration:
+single phase throughout with minimum margin \SI{14.2}{K}
+($t = \SI{809}{s}$, near bottom), wellhead temperature never below
+\SI{299.5}{K}, and the choke \emph{never} flashes (the warmer
+stagnation states keep the nozzle sonic point dry). Formation heat
+ingress \SI{109.1}{MJ}.
+\item \emph{Geothermal, adiabatic}: dome entry at \SI{503}{s} --- at
+the \emph{wellhead} this time (\SI{2.77}{MPa}, \SI{264.7}{K}). The
+geothermal gradient removes the weak point at the bottom, so
+sustained expansion cooling wins first where the initial temperature
+is lowest. The initialization delays first entry by a factor 2.9 but
+cannot prevent it: without heat ingress the cooling is unbounded, so
+\emph{every} adiabatic \co\ blowdown of this well ends in the dome
+eventually.
+\end{enumerate}
+\Cref{fig:cmp-hist-geo} shows the corresponding N$_2$/\co\ histories
+at the geothermal initialization.
+The margin maps make the mechanism legible: the critical window is
+the first 10--20 minutes; once the depressurization transient has
+passed and the discharge rate has fallen, heat ingress dominates and
+margins grow beyond \SI{40}{K} everywhere. The engineering summary is
+that \emph{the coupled thermal path plus a summer-warm initial column
+keeps the entire system --- wellbore and choke throat --- comfortably
+single phase for this choke size}; the HEM choke extension is the
+necessary model element only for cold initial columns (and, by its
+construction, it degrades gracefully to the single-phase model
+whenever the throat is dry).
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{cmp_histories_geo.png}
+\caption{Matched N$_2$/\co\ blowdowns at the geothermal summer
+initialization (HEM choke for \co): wellhead pressure and
+temperature, mass flow rate, normalized inventory; coupled (solid)
+and adiabatic (dotted) walls.}
+\label{fig:cmp-hist-geo}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{margin_zt.png}
+\caption{\co\ saturation-margin field $m(z,t) = T -
+T_{\mathrm{sat}}(p)$ for the four campaign cases. White regions in
+the adiabatic panels lie beyond the flagged dome entry
+($\times$ markers); the dashed line is the \SI{5}{K} contour.}
+\label{fig:margin-zt}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{min_margin.png}
+\caption{Minimum saturation margin over the column (left) and the
+depth at which the minimum occurs (right).}
+\label{fig:min-margin}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.6\textwidth]{saturation_paths.png}
+\caption{Wellhead (solid) and bottomhole (dashed) $p$--$T$
+trajectories of the four \co\ cases against the saturation curve;
+$\times$: flagged dome entries; $\star$: critical point.}
+\label{fig:sat-paths}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{choke_hem.png}
+\caption{HEM choke behavior for the coupled \co\ cases: discharge
+rate (left) and HEM throat quality (right; gaps denote a dry,
+single-phase throat). The geothermal case never flashes.}
+\label{fig:choke-hem}
+\end{figure}
+
+\subsection{Wave propagation: N$_2$ versus CO$_2$}
+
+\Cref{fig:wave} compares the bottomhole arrival of the valve-opening
+expansion wave at the geothermal initialization (600 cells). The
+\co\ wave arrives at ${\sim}\SI{2.7}{s}$ against ${\sim}\SI{1.7}{s}$
+for N$_2$: the \co\ sound speed at the initial state
+(${\approx}\SI{223}{m/s}$ at \SI{5}{MPa}/\SI{300}{K}) is depressed
+well below both the nitrogen value (${\approx}\SI{353}{m/s}$) and its
+own ideal-gas estimate ($\sqrt{\gamma R T} \approx \SI{270}{m/s}$) by
+real-gas attraction as the state approaches the critical region ---
+the same non-ideality that raises the density. The reverberation
+period and the staircase structure scale accordingly.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.85\textwidth]{wave_geo.png}
+\caption{Bottomhole pressure perturbation during the first
+\SI{10}{s} (geothermal initialization, 600 cells): the \co\ expansion
+wave arrives ${\sim}1.6\times$ later than nitrogen's, in the ratio of
+the sound speeds.}
+\label{fig:wave}
+\end{figure}
+
+\subsection{Fiber-optic sensor outputs}
+\label{sec:sensors}
+
+The LSU well instrumentation motivates a dedicated output layer:
+distributed temperature sensing (DTS) along the bore and a fiber on
+the outside of the 13-3/8\,in casing. The model samples \emph{virtual
+sensors} at the corresponding locations: depths
+$\zeta \in \{50, 500, 1000, 1500, 1950\}\,\si{ft}$, at two
+\emph{radial} stations --- in the fluid (bore DTS) and on the
+13-3/8\,in casing outer surface (external fiber), the latter
+available in conjugate runs only, since only the coupled model
+carries radial temperature information. The axial/radial distinction
+is kept explicit throughout: a ``sensor'' is a (depth, radial
+station) pair, and the radial station determines which physics it
+sees.
+
+\Cref{fig:sensors-geo} shows the full sensor set for the headline
+(geothermal, coupled, HEM) \co\ case;
+\cref{fig:profiles-geo} the corresponding $T(\zeta)$ and $p(\zeta)$
+profiles at selected times with the sensor depths marked; and
+\cref{fig:cmp-sensors} the N$_2$/\co\ bore-DTS comparison at two
+depths (uniform IC). Three observations carry over from the nitrogen
+phase and sharpen for \co: (i)~the bore DTS tracks the full transient
+with excursions of a few kelvin in coupled cases; (ii)~the external
+13-3/8\,in fiber is nearly isolated from the transient by the air
+annulus --- excursions below \SI{0.5}{K} in \SI{30}{min} --- so it
+measures the completion's slow thermal depletion, not the fluid
+transient; a measurable deviation on that fiber would indicate an
+annulus condition different from the air-filled assumption (e.g.\
+liquid in the annulus), making it a useful diagnostic of annulus
+integrity; (iii)~depth resolution matters mainly through the
+geothermal offset and the hydrostatic margin effect, the transient
+shape being nearly depth-uniform in the quasi-static regime.
+Animations of the evolving fields with the sensor markers, and the
+complete numerical sensor histories
+(CSV: per-sensor $T(t)$ with location metadata; fluid $p, \rho, u$ at
+the bore stations; field profiles at selected times), accompany the
+repository for direct comparison with experimental records; the
+report figures are selected static views of the same data.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{sensors_T_co2_geo.png}
+\caption{Virtual fiber-optic sensor histories, headline \co\ case
+(geothermal, coupled, HEM choke): bore DTS stations (left) and
+external 13-3/8\,in casing fiber (right) at five depths.}
+\label{fig:sensors-geo}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{profiles_co2_geo.png}
+\caption{Headline \co\ case: temperature and pressure versus depth at
+selected times; horizontal markers denote the fiber-sensor depths.}
+\label{fig:profiles-geo}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{cmp_sensors.png}
+\caption{Bore DTS comparison, N$_2$ versus \co\ (uniform \SI{300}{K},
+coupled), at \SI{500}{ft} and \SI{1950}{ft}.}
+\label{fig:cmp-sensors}
+\end{figure}
+
+\subsection{Velocity fields: diagnosis of the oscillatory structure}
+\label{sec:velocity}
+
+The velocity field is the least smooth of the reported quantities and
+is presented without smoothing, per the project's standing rule that
+numerical results are diagnosed, not cosmetically filtered.
+\Cref{fig:velocity} separates the two regimes for both fluids. During
+the first seconds (left panels) the profile is the superposition of
+the growing linear expansion profile and the descending/reverberating
+wave fronts --- sharp but grid-converged structures (peak
+perturbation velocities 1.18/1.20/\SI{1.21}{m/s} at 200/400/1200
+cells in the nitrogen study), i.e.\ \emph{physics}, not oscillatory
+error: the staircase reverberation of \cref{fig:xt} seen in velocity.
+At late times (right panels) the profile is linear in $z$ ---
+spatially uniform expansion --- with small residual acoustic ripples
+that decay on the frictional time scale: with the Churchill friction
+model active the late-time ripple amplitude is damped by roughly two
+orders of magnitude relative to a frictionless run, identifying
+wall friction (a physical mechanism, not numerical dissipation) as
+the damping agent. The \co\ panels show the same structure on a
+slower acoustic clock and with smaller velocities --- the denser
+fluid needs less velocity for the same mass flux.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{velocity_n2.png}\\[2pt]
+\includegraphics[width=\textwidth]{velocity_co2.png}
+\caption{Velocity profiles, unsmoothed, during the early acoustic
+phase (left) and the quasi-static discharge (right): N$_2$ (top,
+uniform IC) and \co\ (bottom, geothermal IC, coupled). Insets zoom
+the wellhead region at late times.}
+\label{fig:velocity}
+\end{figure}
+
+\subsection{Long-time behavior}
+
+By the end of the hour both coupled cases approach a slow, nearly
+isothermal terminal regime: the discharge rate has fallen below
+$\mathcal{O}(0.05)\,\si{kg/s}$, the choke is approaching (N$_2$) or
+has passed (late \co) the choked/unchoked transition, the column
+temperature relaxes back toward the geothermal profile on the
+completion's thermal time scale, and the remaining inventory
+(${\sim}2\,\%$) drains at near-ambient driving pressure until the
+check-valve condition closes the boundary. The model's terminal state
+is thus thermal re-equilibration with the formation at ambient
+backpressure --- the physically expected end state.
+
+%=============================================================
+\section{Reproducibility}
+%=============================================================
+\label{sec:repro}
+
+\Cref{tab:common} collects the parameters common to the campaign
+cases; \cref{tab:cases} the per-case matrix with headline outputs,
+including the conservation errors of each run. Together with the
+equations and algorithms of
+\cref{sec:model,sec:ic,sec:bc,sec:thermal,sec:numerics} these tables
+define every reported calculation completely; the repository
+(\cref{sec:code}) additionally contains the exact campaign drivers
+(\texttt{scripts/run\_co2\_campaign.py},
+\texttt{run\_co2\_campaign2.py}), the regression suite, and the raw
+outputs (JSON summaries, CSV exports, checkpoints).
+
+\begin{table}[htb]
+\centering
+\caption{Parameters common to all campaign cases.}
+\label{tab:common}
+\small
+\begin{tabular}{ll}
+\toprule
+Geometry & $L = \SI{609.6}{m}$ (2000\,ft); $D = \SI{170.3}{mm}$
+(7-5/8\,in casing ID)\\
+Grid & $N = 300$ uniform cells (campaign); $N = 600$ (wave runs)\\
+CFL & 0.8\\
+Duration & \SI{3600}{s} (campaign); \SI{10}{s} (wave runs)\\
+Initial pressure & \SI{5.0}{MPa} at the wellhead; hydrostatic
+\cref{eq:hydro}\\
+Back pressure & $p_b = \SI{101.325}{kPa}$\\
+Choke & $d_c = \SI{12.7}{mm}$, $C_d = 0.84$, quasi-steady
+HEM nozzle (\cref{sec:hem})\\
+Friction & Churchill \cref{eq:churchill},
+$\varepsilon = \SI{4.6e-5}{m}$\\
+Viscosity (Re, Nu) & $\mu = \SI{1.8e-5}{}$ (N$_2$) /
+\SI{1.5e-5}{Pa.s} (\co); $\mathrm{Pr} = 0.72$ / 0.78\\
+N$_2$ EOS & ideal gas, $R = \SI{296.8}{J/(kg.K)}$, $\gamma = 1.40$\\
+\co\ EOS & Span--Wagner via CoolProp 8.0; tables
+$512^2$ on $[0.5, 300]\,\si{kg/m^3} \times [220, 340]\,\si{K}$\\
+Conjugate wall & stack of \cref{tab:stack}; 16 formation shells to
+$r = \SI{5}{m}$; Dittus--Boelter film\\
+Geothermal profile & $T_s = \SI{305.4}{K}$,
+$\Gamma = \SI{25.5}{K/km}$ (geo cases; also formation far field)\\
+Uniform IC & $T_0 = \SI{300}{K}$ (fluid); formation at the
+annual-mean profile ($T_s = \SI{294.3}{K}$)\\
+Sensors & \cref{sec:sensors}; history stride 50 steps; 301 field
+snapshots\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htb]
+\centering
+\caption{Campaign case matrix and headline outputs. ``Entry'' is the
+flagged first in-wellbore dome entry (time; depth); $\min m$ the
+minimum saturation margin; $Q_{\mathrm{in}}$ the formation heat
+ingress; $\epsilon_M, \epsilon_E$ the relative mass/energy budget
+errors.}
+\label{tab:cases}
+\scriptsize
+\begin{tabular}{llllllllll}
+\toprule
+Case & Fluid & IC & Wall & Choke & Entry & $\min m$ [K] &
+$Q_{\mathrm{in}}$ [MJ] & $\epsilon_M$ & $\epsilon_E$\\
+\midrule
+n2\_conj & N$_2$ & 300 K & coupled & ideal & --- & --- & 65.2 &
+$6{\cdot}10^{-14}$ & $3{\cdot}10^{-14}$\\
+n2\_adia & N$_2$ & 300 K & adiabatic & ideal & --- & --- & 0 &
+$4{\cdot}10^{-12}$ & $6{\cdot}10^{-12}$\\
+co2\_conj\_hem & \co & 300 K & coupled & HEM & --- & 2.84 & 137.9 &
+$2{\cdot}10^{-14}$ & $2{\cdot}10^{-14}$\\
+co2\_adia\_hem & \co & 300 K & adiabatic & HEM & 173 s; 609 m & 0 &
+0 & $2{\cdot}10^{-16}$ & $3{\cdot}10^{-16}$\\
+co2\_conj\_geo & \co & geo & coupled & HEM & --- & 14.2 & 109.1 &
+$1{\cdot}10^{-14}$ & $6{\cdot}10^{-14}$\\
+co2\_adia\_geo & \co & geo & adiabatic & HEM & 503 s; 1 m & 0 & 0 &
+$5{\cdot}10^{-15}$ & $2{\cdot}10^{-15}$\\
+n2\_conj\_geo & N$_2$ & geo & coupled & ideal & --- & --- & 63.2 &
+$2{\cdot}10^{-14}$ & $6{\cdot}10^{-14}$\\
+n2\_adia\_geo & N$_2$ & geo & adiabatic & ideal & --- & --- & 0 &
+$3{\cdot}10^{-12}$ & $8{\cdot}10^{-12}$\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 %=============================================================
 \section{Conclusions and outlook}
 %=============================================================
 \label{sec:outlook}
 
-A conservative Godunov/HLLC finite-volume model of vertical-well blowdown
-has been implemented and verified for the adiabatic, ideal-gas stage:
-discrete mass and total-plus-potential energy budgets close to machine
-precision; the quasi-static limit reproduces the lumped-vessel solution
-to better than \SI{1}{\percent}; and the characteristic-coupled choke
-boundary condition behaves consistently from the choked regime through
-valve closure, including the open-pipe limit. The baseline nitrogen case
-exhibits the expected physics: a weak descending expansion wave and
-reverberation, quasi-static discharge, and strong expansion cooling that
-reaches the nitrogen critical temperature at the end of the transient.
+A conservative Godunov/HLLC finite-volume model of vertical-well
+blowdown has been implemented and verified through the real-fluid
+\co\ stage. The documented chain is: a property interface implemented
+by an ideal gas and by the Span--Wagner EOS with a quantified table
+closure; hydrostatic initialization consistent with a geothermal
+temperature profile, verified by closed-well stationarity; a wellhead
+boundary that couples the interior characteristic to a quasi-steady
+choke, extended to a homogeneous-equilibrium formulation that admits
+flashing within the restriction while the wellbore remains strictly
+single phase under an every-step saturation monitor; and a conjugate
+completion--formation thermal model with every empirical correlation
+documented, verified against analytical limits and an independent
+transient-conduction reference. Budgets close to machine precision in
+every reported run.
 
-The conjugate completion--formation thermal model closes the preferred
-level of the thermal hierarchy: an implicitly advanced radial network of
-the actual LSU well completion, verified against analytical limits and
-an independent transient-conduction reference, coupled to the wellbore
-energy equation with exact discrete energy exchange. Its first
-application overturns the adiabatic intuition for this facility: for
-the baseline slow blowdown, heat supplied by the casing, cement, and
-near-well formation holds the wellhead fluid within $\sim$\SI{16}{K} of
-the geothermal state (minimum \SI{284}{K} against \SI{124}{K}
-adiabatic), with the air-filled 7-5/8\,in~$\times$~13-3/8\,in annulus
-as the dominant solid-side resistance. The practical corollary is that
-the severity of blowdown cooling at this facility is controlled by the
-choke size (residence time) and by the annulus condition --- both
-operationally accessible parameters.
+The physical findings: (i)~at matched \SI{5}{MPa}/\SI{300}{K}
+conditions \co\ stores $2.56\times$ the nitrogen mass but discharges
+only $1.40\times$ faster, with a correspondingly longer blowdown and
+a slower acoustic clock ($a \approx 223$ vs \SI{353}{m/s});
+(ii)~formation heat ingress, not fluid inertia, is what keeps the
+cooling \co\ out of the vapor dome --- adiabatically the dome is
+reached in minutes regardless of initialization; (iii)~the
+geothermal summer initialization converts a marginal single-phase
+case (\SI{2.8}{K} minimum margin, flashing choke) into a comfortable
+one (\SI{14.2}{K}, dry choke), and relocates the eventual adiabatic
+failure point from bottomhole to wellhead; (iv)~the HEM choke
+correction is small where the throat barely enters the dome
+($+1.4\,\%$ at the initial state) but is the element that makes the
+cold-column cases well-posed at all; (v)~the external 13-3/8\,in
+fiber is nearly isolated by the air annulus and thus functions as an
+annulus-integrity diagnostic rather than a transient sensor.
 
-The next stages, in order of priority: (i)~real-fluid CO$_2$
-thermodynamics behind the existing property interface (single-phase
-gaseous, then dense/transcritical), where the competition between
-Joule--Thomson cooling and formation heat ingress --- now resolvable
-with the verified conjugate model --- is the physically interesting
-question for facility blowdown tests; and (ii)~phase appearance and
-two-phase CO$_2$ flow, building on the two-phase benchmark heritage of
-the framework.
+The deferred items are explicit: two-phase conditions \emph{inside
+the wellbore} halt the simulation by design and await a distributed
+two-phase model (the framework's two-phase shock-tube heritage is the
+intended starting point); non-equilibrium and slip corrections to the
+HEM choke become relevant once facility hardware fixes the restriction
+geometry and data allow $C_d$ calibration; the tubing, injection
+line, and gauge carriers inside the 7-5/8\,in casing are not yet
+represented; and fluid-side transport properties are constants, to be
+revisited for transcritical operation.
 
 \section*{Code and data availability}
-The implementation, verification scripts, and notebooks are maintained at
-\url{https://github.com/JaderBarbosaLSU/hyperco2-wellbore}.
+\label{sec:code}
+The implementation, regression suite (42 tests), campaign drivers,
+raw outputs (JSON/CSV), figures, and animations are maintained at
+\url{https://github.com/JaderBarbosaLSU/hyperco2-wellbore}. Colab
+notebooks reproduce the shock-tube, blowdown, thermal, and \co\
+stages.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

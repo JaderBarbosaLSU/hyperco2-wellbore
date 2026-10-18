@@ -1,0 +1,76 @@
+{
+  "stationarity": {
+    "n2_uniform_n100": {
+      "max_abs_u_m_per_s": 0.10810289558582516,
+      "max_abs_dp_Pa": 1585.3526742290705,
+      "rel_dp": 0.0003170705348458141,
+      "mass_balance_error": 8.454470559784393e-16
+    },
+    "n2_uniform_n300": {
+      "max_abs_u_m_per_s": 0.03628616779418309,
+      "max_abs_dp_Pa": 527.503518929705,
+      "rel_dp": 0.000105500703785941,
+      "mass_balance_error": 4.2272352093167535e-16
+    },
+    "n2_geothermal_n100": {
+      "max_abs_u_m_per_s": 0.1089039031467089,
+      "max_abs_dp_Pa": 1569.1574556939304,
+      "rel_dp": 0.0003138314911387861,
+      "mass_balance_error": 0.0
+    },
+    "n2_geothermal_n300": {
+      "max_abs_u_m_per_s": 0.03567354419417133,
+      "max_abs_dp_Pa": 535.0527176940814,
+      "rel_dp": 0.00010701054353881627,
+      "mass_balance_error": 5.890953150862825e-16
+    },
+    "co2_uniform_n100": {
+      "max_abs_u_m_per_s": 0.16981055925325264,
+      "max_abs_dp_Pa": 4244.8080633552745,
+      "rel_dp": 0.0008489616126710549,
+      "mass_balance_error": 6.607446116132426e-16
+    },
+    "co2_uniform_n300": {
+      "max_abs_u_m_per_s": 0.0566288923879266,
+      "max_abs_dp_Pa": 1395.7159594334662,
+      "rel_dp": 0.00027914319188669326,
+      "mass_balance_error": -4.404228103348128e-16
+    },
+    "co2_geothermal_n100": {
+      "max_abs_u_m_per_s": 0.16105166228456255,
+      "max_abs_dp_Pa": 3729.8140783961862,
+      "rel_dp": 0.0007459628156792372,
+      "mass_balance_error": -3.917274634420421e-16
+    },
+    "co2_geothermal_n300": {
+      "max_abs_u_m_per_s": 0.057022818111073806,
+      "max_abs_dp_Pa": 1191.4120386680588,
+      "rel_dp": 0.00023828240773361177,
+      "mass_balance_error": 5.22290759293677e-16
+    }
+  },
+  "cd_sensitivity": {
+    "0.61": {
+      "mdot_initial_kg_s": 0.884538458201357,
+      "t_half_mass_s": 680.4350175232915
+    },
+    "0.72": {
+      "mdot_initial_kg_s": 1.0435981730154127,
+      "t_half_mass_s": 576.5293185955798
+    },
+    "0.84": {
+      "mdot_initial_kg_s": 1.216961142084716,
+      "t_half_mass_s": 494.2155852382271
+    },
+    "1.0": {
+      "mdot_initial_kg_s": 1.4478567371296822,
+      "t_half_mass_s": 415.19599646588097
+    },
+    "t_half_times_cd_normalized": {
+      "0.61": 0.999817577897165,
+      "0.72": 0.999903690065613,
+      "0.84": 1.0,
+      "1.0": 1.0001322559170391
+    }
+  }
+}

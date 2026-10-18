@@ -19,3 +19,5 @@ results/co2/co2_csv_export.zip
 results/*.log
 results/co2run*.log
 results/co2*/*.zip
+paper/hyperco2-paper-figures.zip
+paper/main.pdf
