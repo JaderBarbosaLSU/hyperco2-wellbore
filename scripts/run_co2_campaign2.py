@@ -200,9 +200,12 @@ with pub_style("double"):
         mzt = margin_field(r)
         pc = ax.pcolormesh(r.snap_times / 60.0, d_ft, mzt.T, cmap="RdYlBu",
                            vmin=0.0, vmax=vmax, shading="nearest")
-        c0 = ax.contour(r.snap_times / 60.0, d_ft, mzt.T, levels=[5.0],
-                        colors="k", linewidths=0.7, linestyles="--")
-        ax.clabel(c0, fmt="%g K", fontsize=6)
+        if mzt.shape[0] >= 2:   # a run halted at dome entry may have
+            c0 = ax.contour(r.snap_times / 60.0, d_ft, mzt.T,  # 1 snapshot
+                            levels=[5.0], colors="k", linewidths=0.7,
+                            linestyles="--")
+            if c0.levels is not None and len(c0.allsegs[0]):
+                ax.clabel(c0, fmt="%g K", fontsize=6)
         ax.set_title(lab, fontsize=8)
         if r.two_phase_entry:
             ax.plot(r.two_phase_entry["t"] / 60.0,
