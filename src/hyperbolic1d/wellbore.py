@@ -295,6 +295,9 @@ class BlowdownResult:
     choked: np.ndarray
     u_wellhead_face: np.ndarray | None = None   # choke face velocity
     sat_margin_min: np.ndarray | None = None    # min T - T_sat over cells
+    sat_margin_depth: np.ndarray | None = None  # depth [m] of that minimum
+    choke_flashing: np.ndarray | None = None    # HEM throat inside dome
+    choke_quality: np.ndarray | None = None     # HEM throat vapor quality
     two_phase_entry: dict | None = None         # first dome entry, if any
     heat_input_J: float = 0.0                   # integral of wall heat
     sensor_t: np.ndarray | None = None
@@ -325,32 +328,45 @@ class WellboreModel:
 
     # ------------------------------------------------------------------
     def initial_state(self, p0: float, T0: float,
-                      init: Literal["uniform", "hydrostatic"] = "uniform"):
-        """Uniform (p0, T0) everywhere, or isothermal hydrostatic profile
-        with p0 prescribed at the wellhead."""
+                      init: Literal["uniform", "hydrostatic"] = "uniform",
+                      geothermal=None):
+        """Uniform (p0, T0) everywhere, or hydrostatic profile with p0
+        prescribed at the wellhead.
+
+        ``geothermal``: optional callable depth [m] -> T [K] (e.g. a
+        :class:`hyperbolic1d.thermal.Geothermal`). When given, the
+        initial temperature is T(z, 0) = geothermal(depth) instead of
+        the uniform T0, and the hydrostatic integration uses the local
+        temperature: dp/dz = -rho(p, T(z)) g.
+        """
         L = self.geometry.depth
         zc = (np.arange(self.n_cells) + 0.5) * (L / self.n_cells)
+        if geothermal is not None:
+            T = np.asarray(geothermal(L - zc), dtype=float)  # zc=0: bottom
+        else:
+            T = np.full(self.n_cells, T0)
         if init == "hydrostatic" and self.gravity:
-            if isinstance(self.eos, IdealGasEOS):
+            if isinstance(self.eos, IdealGasEOS) and geothermal is None:
                 # isothermal ideal column: p = p0 exp(g (L - z)/(R T0));
                 # p0 is the wellhead pressure
                 p = p0 * np.exp(G_EARTH * (L - zc) / (self.eos.R * T0))
             else:
-                # real fluid: integrate dp/dz = -rho(p, T0) g downward
-                # from the wellhead (midpoint rule per cell)
+                # integrate dp/dz = -rho(p, T(z)) g downward from the
+                # wellhead (midpoint rule per cell); works for any EOS
+                # and any temperature profile
                 dz = L / self.n_cells
                 p = np.empty(self.n_cells)
-                pw = p0 * (1.0 + 0.0)
+                Tw = float(geothermal(0.0)) if geothermal is not None \
+                    else T0
                 # wellhead face -> top cell center is dz/2
-                rho_w, _ = self.eos.rho_e_from_pT(pw, T0)
-                pc = pw + float(np.atleast_1d(rho_w)[0]) * G_EARTH * dz / 2
+                rho_w, _ = self.eos.rho_e_from_pT(p0, Tw)
+                pc = p0 + float(np.atleast_1d(rho_w)[0]) * G_EARTH * dz / 2
                 for j in range(self.n_cells - 1, -1, -1):
                     p[j] = pc
-                    rho_c, _ = self.eos.rho_e_from_pT(pc, T0)
+                    rho_c, _ = self.eos.rho_e_from_pT(pc, float(T[j]))
                     pc = pc + float(np.atleast_1d(rho_c)[0]) * G_EARTH * dz
         else:
             p = np.full(self.n_cells, p0)
-        T = np.full(self.n_cells, T0)
         rho, e = self.eos.rho_e_from_pT(p, T)
         V = np.zeros((self.n_cells, 3))
         V[:, 0] = rho
@@ -388,8 +404,14 @@ class WellboreModel:
               n_snapshots: int = 9,
               hist_stride: int = 20,
               sensors=None,
+              geothermal=None,
               progress: Callable[[float, float], None] | None = None,
               ) -> BlowdownResult:
+        """``geothermal``: optional callable depth -> T [K] defining the
+        initial temperature profile T(z,0) = T_surface + G*depth (see
+        initial_state); T0 is then unused in the initialization. For
+        consistency with a conjugate wall model, pass the same
+        Geothermal instance to FormationCoupledWall(geothermal=...)."""
         eos = self.eos
         ideal = isinstance(eos, IdealGasEOS)
         g = eos.gamma if ideal else None
@@ -403,10 +425,12 @@ class WellboreModel:
             del self._choke_cache          # never reuse across solves
         if hasattr(self, "_demand_cache"):
             del self._demand_cache
+        if hasattr(self, "_flash_state"):
+            del self._flash_state
         # the real-fluid face solve is cheap and must track the boundary
         # cell every step (stride caching destabilizes the boundary)
         choke_stride = self.choke_update_stride if ideal else 1
-        zc, V = self.initial_state(p0, T0, init)
+        zc, V = self.initial_state(p0, T0, init, geothermal=geothermal)
         snap_times = np.linspace(0.0, t_end, n_snapshots)
         snaps = {"p": [], "T": [], "rho": [], "u": []}
         snap_done = 0
@@ -424,7 +448,8 @@ class WellboreModel:
         conjugate = hasattr(self.wall_model, "advance")
         t_hist, mdot_hist, mass_hist, pwh_hist, Twh_hist, chk_hist = \
             [], [], [], [], [], []
-        uf_hist, satm_hist = [], []
+        uf_hist, satm_hist, satd_hist = [], [], []
+        flash_hist, qual_hist = [], []
         two_phase_entry = None
         if sensors is not None:
             sensors.bind(zc, L, self.wall_model)
@@ -568,6 +593,9 @@ class WellboreModel:
                                 p0, T0, self.choke.p_back)
                             dem = (self.choke.effective_area * G, chk, p_i)
                         self._demand_cache = dem
+                        self._flash_state = (
+                            bool(getattr(eos, "last_choke_flashing", False)),
+                            getattr(eos, "last_choke_throat_quality", None))
                     demand, choked, _ = dem
                     if demand <= 0.0:
                         rho_f, u_f, p_f, mdot = rho_i, 0.0, p_i, 0.0
@@ -621,11 +649,16 @@ class WellboreModel:
                 Twh_hist.append(T[-1])
                 chk_hist.append(choked)
                 uf_hist.append(u_f)
+                fl, ql = getattr(self, "_flash_state", (False, None))
+                flash_hist.append(fl)
+                qual_hist.append(np.nan if ql is None else ql)
                 if sensors is not None:
                     sensors.sample(T, rho, u, p)
                 if monitor_sat:
-                    satm_hist.append(float(np.min(
-                        eos.saturation_margin(p, T))))
+                    sm = eos.saturation_margin(p, T)
+                    jm = int(np.argmin(sm))
+                    satm_hist.append(float(sm[jm]))
+                    satd_hist.append(float(L - zc[jm]))
                 if progress is not None:
                     progress(t, t_end)
             if two_phase_entry is not None:
@@ -663,6 +696,9 @@ class WellboreModel:
             T_wellhead=np.array(Twh_hist), choked=np.array(chk_hist),
             u_wellhead_face=np.array(uf_hist),
             sat_margin_min=np.array(satm_hist) if monitor_sat else None,
+            sat_margin_depth=np.array(satd_hist) if monitor_sat else None,
+            choke_flashing=np.array(flash_hist),
+            choke_quality=np.array(qual_hist),
             two_phase_entry=two_phase_entry,
             sensor_t=sensor_t, sensor_data=sensor_data,
             sensor_fluid_extra=sensor_extra, sensor_meta=sensor_meta,

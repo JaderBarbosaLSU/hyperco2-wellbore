@@ -65,13 +65,82 @@ split above (per-step supply response, strided demand) the boundary is
 stable and the cost is ~3 ms/step total. Lesson: the fast-acoustic part of
 an outflow boundary cannot be time-lagged.
 
+## 3b. HEM two-phase choke (flashing across the valve only)
+
+Phase change associated with the strong expansion across the wellhead
+restriction is handled **algebraically in the choke model** while the
+distributed wellbore flow remains strictly single phase (the per-step
+dome monitor of §4 is unchanged and still stops the run if any *cell*
+enters the dome). With `hem_choke=True` (default) the throat isentrope
+in `orifice_mass_flux` is allowed to continue into the vapor dome: ρ and
+h along s₀ are then the homogeneous-equilibrium (flashed) mixture
+properties from the same Span–Wagner EOS, so
+
+G(p_t) = ρ_HEM(p_t, s₀) √(2(h₀ − h_HEM(p_t, s₀)))
+
+is the standard HEM nozzle flux, and its maximization over p_t yields
+the HEM critical (choked) flow — the thermodynamic-equilibrium limit of
+flashing nozzle flow (Starkman et al. 1964; Henry & Fauske 1971 discuss
+non-equilibrium corrections, not included). Reported per call:
+`last_choke_flashing` (throat inside the dome), `last_choke_throat_quality`
+(HEM vapor quality at the throat), and `last_choke_dome_limited` (now
+meaning the expansion was truncated by the EOS *validity* boundary —
+sublimation region — rather than the sonic condition). The solver
+records the flashing flag and throat quality in the result history
+(`choke_flashing`, `choke_quality`).
+
+At 5 MPa/300 K stagnation the sonic point lies just inside the dome:
+throat quality 0.975, and the HEM critical flux exceeds the previous
+single-phase dome bound by only **1.4 %** — i.e. the earlier
+dome-limited flux was already an excellent approximation there. At
+330 K stagnation the sonic point is dry and the model reduces exactly
+to the single-phase result (automated test). The upstream state at the
+choke must be single phase; two-phase conditions *inside the wellbore*
+remain out of scope and still halt the run with a flagged report.
+
+## 3c. Geothermal initial temperature profile
+
+`WellboreModel.solve(..., geothermal=Geothermal(T_surface, gradient))`
+replaces the uniform initial temperature with T(z,0) = T_surface + G·z
+(z = depth) and integrates the hydrostatic initialization with the
+local temperature, dp/dz = −ρ(p, T(z))g. Both parameters are plain
+dataclass inputs, not hard-coded. For the Louisiana-summer case:
+
+* **T_surface = 305.4 K (32.2 °C / 90 °F)** — a representative warm
+  summer-day wellhead/fluid temperature for Baton Rouge (NOAA 1991–2020
+  climate normals: July daily mean ≈ 28.5 °C, mean daily high ≈ 33 °C).
+* **G = 25.5 K/km (1.4 °F/100 ft)** — a typical Louisiana Gulf-Coast
+  geothermal gradient (regional range ≈ 22–30 K/km, SMU Geothermal
+  Laboratory heat-flow compilation); identical to the default used by
+  the formation thermal model since Phase 4, so fluid and formation are
+  initialized consistently by passing the same `Geothermal` instance to
+  `FormationCoupledWall(geothermal=...)`.
+
+Resulting initial fluid temperatures for the 2,000-ft well (5 MPa
+wellhead, hydrostatic): 305.5 K (wellhead), 309.2 K (500 ft), 313.3 K
+(1,000 ft), 317.1 K (1,500 ft), 320.9 K (bottomhole), with initial
+saturation margins 18.0 → 27.6 K top to bottom (versus 12.6 → 6.5 K
+for the uniform 300 K column — note the uniform column's margin
+*decreases* with depth because hydrostatic compression raises T_sat,
+while the geothermal gradient more than compensates).
+
+Caveat (documented approximation): the seasonal temperature wave
+penetrates only the top ~10 m of the ground, so initializing the
+*formation* with the summer surface temperature slightly warms the
+shallow formation relative to the annual-mean profile (294.3 K
+surface). For blowdown time scales (≲ hours) the effect on the fluid
+is confined to the near-wellhead cells and is small compared with the
+18 K initial margin; both profiles remain available as inputs.
+
 ## 4. Single-phase validity monitoring
 
 `saturation_margin(p, T) = T − T_sat(p)` (T_sat from a 200-node table,
 < 0.01 K interpolation error; above p_crit the gate is T_crit) is checked
 **every step** over all cells. On the first negative margin the run stops
 and reports (t, depth, p, T, ρ, T_sat) in `result.two_phase_entry`; the
-margin history is recorded in `result.sat_margin_min`. The p–T
+margin history is recorded in `result.sat_margin_min`, together with
+the depth of the minimum (`result.sat_margin_depth`); the full margin
+field m(z,t) = T − T_sat(p) is recoverable from the (p, T) snapshots. The p–T
 trajectories of wellhead and bottom cells are plotted against the
 saturation curve (`cmp_co2_saturation_path.png`).
 

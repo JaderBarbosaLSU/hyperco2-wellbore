@@ -76,6 +76,12 @@ class SpanWagnerCO2:
     # transport constants for friction / Dittus-Boelter (documented approx.)
     mu_ref: float = 1.5e-5        # Pa s (CO2 gas ~300 K)
     Pr_ref: float = 0.78
+    # homogeneous-equilibrium (HEM) choke: allow the throat isentrope to
+    # continue into the vapor dome with equilibrium (flashed) rho and h.
+    # The WELLBORE remains single-phase (dome monitor unchanged); only the
+    # algebraic nozzle expansion may flash. False restores the previous
+    # behavior (flux evaluated at the single-phase dome bound).
+    hem_choke: bool = True
     _built: bool = field(default=False, repr=False)
 
     # ------------------------------------------------------------------
@@ -367,6 +373,22 @@ class SpanWagnerCO2:
         G(p_t) = rho(p_t, s0) * sqrt(2 (h0 - h(p_t, s0))), maximized over
         the throat pressure; choked when the maximizer exceeds p_back.
         Returns (G, choked).
+
+        With ``hem_choke`` (default) the throat expansion is allowed to
+        enter the vapor dome: rho and h along the isentrope are then the
+        homogeneous-equilibrium (flashed) mixture properties from the
+        same Span-Wagner EOS, so G(p_t) is the standard HEM nozzle flux
+        and the maximization finds the HEM critical (choked) flow.
+        Reported on the instance after each call:
+          last_choke_flashing        throat state inside the dome
+          last_choke_throat_quality  HEM vapor quality at the throat
+          last_choke_dome_limited    expansion truncated by the EOS
+                                     validity boundary (sublimation /
+                                     table range), not by the sonic
+                                     condition -- with HEM enabled this
+                                     is rare (deep vacuum discharge)
+        The upstream (wellbore-side) state must be single phase; that is
+        enforced by the solver's per-step dome monitor, not here.
         """
         from scipy.optimize import minimize_scalar
 
@@ -389,18 +411,19 @@ class SpanWagnerCO2:
             dh = max(h0 - h, 0.0)
             return rho * np.sqrt(2.0 * dh)
 
+        self.last_choke_dome_limited = False
+        self.last_choke_flashing = False
+        self.last_choke_throat_quality = None
         if p_back >= p0:
             return 0.0, False
-        # single-phase scope: the throat expansion is limited to the dome
-        # crossing of the isentrope. If the G-maximum lies at that bound,
-        # the physical choke would involve condensing nozzle flow; the
-        # returned flux is then the single-phase bound and the event is
-        # recorded on self.last_choke_dome_limited for reporting.
+        hem = getattr(self, "hem_choke", True)
         p_dome = self.saturation_pressure_for_entropy(s0)
         lo = max(p_back, 1.2e5, 0.05 * p0)
-        if p_dome is not None:
+        if p_dome is not None and not hem:
+            # single-phase scope (hem_choke=False): the throat expansion
+            # is truncated at the dome crossing of the isentrope; the
+            # returned flux is then the single-phase bound.
             lo = max(lo, p_dome * 1.001)
-        self.last_choke_dome_limited = False
         if lo >= p0 * 0.999:
             # stagnation state itself at/inside the dome boundary
             self.last_choke_dome_limited = True
@@ -424,9 +447,22 @@ class SpanWagnerCO2:
                               method="bounded",
                               options={"xatol": max(1e-4 * p0, 100.0)})
         p_star = float(res.x)
-        if p_dome is not None and p_star <= lo * 1.002:
+        if p_dome is not None and not hem and p_star <= lo * 1.002:
             self.last_choke_dome_limited = True
-        if p_star > p_back * 1.001:
+        choked = p_star > p_back * 1.001
+        pt_eff = p_star if choked else float(p_back)
+        if hem and p_dome is not None and pt_eff < p_dome * 0.999:
+            # HEM throat state inside the dome: record flashing + quality
+            self.last_choke_flashing = True
+            try:
+                CPm = _CP()
+                st.update(CPm.PSmass_INPUTS, pt_eff, s0)
+                q = st.Q()
+                self.last_choke_throat_quality = (
+                    float(q) if 0.0 <= q <= 1.0 else None)
+            except ValueError:
+                pass
+        if choked:
             return float(-res.fun), True
         return float(G(float(p_back))), False
 

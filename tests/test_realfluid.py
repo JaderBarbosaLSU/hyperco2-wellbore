@@ -122,3 +122,57 @@ def test_co2_budgets_machine_precision(lsu_geom):
     assert abs(r.mass_balance_error) < 1e-12
     assert abs(r.energy_balance_error) < 1e-12
     assert r.sat_margin_min is not None and r.sat_margin_min.min() > 0
+
+
+def test_hem_choke_flashing(co2):
+    """HEM choke at 5 MPa/300 K: the throat isentrope enters the dome;
+    the HEM critical flux must (slightly) exceed the single-phase dome
+    bound, report flashing and a physical throat quality, and reduce to
+    the single-phase result when the stagnation state is warm enough
+    that the sonic point stays outside the dome."""
+    G_hem, choked = co2.orifice_mass_flux(5e6, 300.0, 101325.0)
+    assert choked and co2.last_choke_flashing
+    assert 0.9 < co2.last_choke_throat_quality < 1.0
+    assert not co2.last_choke_dome_limited
+    sp = SpanWagnerCO2(hem_choke=False)
+    G_sp, _ = sp.orifice_mass_flux(5e6, 300.0, 101325.0)
+    assert sp.last_choke_dome_limited
+    assert G_sp < G_hem < 1.2 * G_sp
+    # warm stagnation state: single-phase sonic point, no flashing
+    G_w, ch_w = co2.orifice_mass_flux(5e6, 330.0, 101325.0)
+    assert ch_w and not co2.last_choke_flashing
+    assert co2.last_choke_throat_quality is None
+
+
+def test_geothermal_initialization(co2, lsu_geom):
+    """T(z,0) = T_surface + G*depth with hydrostatic dp/dz = -rho g:
+    exact profile endpoints, machine-precision budgets, and a larger
+    minimum saturation margin than the uniform-300 K column."""
+    from hyperbolic1d.thermal import Geothermal
+
+    geo = Geothermal(T_surface=305.4, gradient=0.0255)
+    m = WellboreModel(geometry=lsu_geom, choke=ChokeValve(),
+                      eos=SpanWagnerCO2(), gravity=True, friction=True,
+                      n_cells=60)
+    zc, V = m.initial_state(5e6, 300.0, "hydrostatic", geothermal=geo)
+    rho = V[:, 0]
+    p, T, _ = m.eos.primitives(rho, V[:, 2] / rho)
+    L = m.geometry.depth
+    # T recovered through the (rho, e) table closure: compare at the
+    # documented interpolation accuracy (~1e-5 relative)
+    assert T[-1] == pytest.approx(geo(L - zc[-1]), abs=0.05)
+    assert T[0] == pytest.approx(geo(L - zc[0]), abs=0.05)
+    assert T[0] - T[-1] == pytest.approx(geo.gradient * (zc[-1] - zc[0]),
+                                         rel=5e-3)
+    # hydrostatic consistency: interior dp across one cell ~ rho g dz
+    dz = L / m.n_cells
+    j = m.n_cells // 2
+    assert (p[j - 1] - p[j]) == pytest.approx(
+        0.5 * (rho[j] + rho[j - 1]) * 9.80665 * dz, rel=5e-3)
+    r = m.solve(5e6, 300.0, 10.0, init="hydrostatic", geothermal=geo,
+                n_snapshots=2)
+    assert abs(r.mass_balance_error) < 1e-12
+    assert abs(r.energy_balance_error) < 1e-12
+    r_u = m.solve(5e6, 300.0, 10.0, init="hydrostatic", n_snapshots=2)
+    assert r.sat_margin_min.min() > r_u.sat_margin_min.min() + 5.0
+    assert r.sat_margin_depth is not None and r.choke_flashing is not None

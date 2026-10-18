@@ -111,6 +111,8 @@ class Geothermal:
     def T(self, depth):
         return self.T_surface + self.gradient * np.asarray(depth, dtype=float)
 
+    __call__ = T   # usable directly as depth -> T (wellbore init profile)
+
 
 GEOTHERMAL_DEFAULT = Geothermal()
 

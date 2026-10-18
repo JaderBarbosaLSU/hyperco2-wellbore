@@ -19,6 +19,7 @@ Outputs -> results/co2/..., results/cmp_*.png, results/co2/export/*.csv
 
 import json
 import pathlib
+import pickle
 import sys
 
 import numpy as np
@@ -59,16 +60,24 @@ for fluid, eos_f in (("co2", lambda: SpanWagnerCO2()),
                      ("n2", lambda: NITROGEN)):
     for thermal in ("conjugate", "adiabatic"):
         key = f"{fluid}_{thermal}"
-        print(f"[run] {key}", flush=True)
-        wall = FormationCoupledWall() if thermal == "conjugate" \
-            else AdiabaticWall()
-        sensors = lsu_fiber_sensors(DEPTHS_FT) if thermal == "conjugate" \
-            else lsu_fiber_sensors(DEPTHS_FT, casing_external=False)
-        m = WellboreModel(geometry=GEOM, choke=CHOKE, eos=eos_f(),
-                          gravity=True, friction=True, n_cells=N,
-                          wall_model=wall)
-        r = m.solve(P0, T0, T_END, init="hydrostatic", n_snapshots=301,
-                    hist_stride=50, sensors=sensors)
+        ckpt = CO2DIR / f"ckpt_{key}.pkl"
+        if ckpt.exists():
+            print(f"[run] {key} (checkpoint found, skipping)", flush=True)
+            with open(ckpt, "rb") as f:
+                r = pickle.load(f)
+        else:
+            print(f"[run] {key}", flush=True)
+            wall = FormationCoupledWall() if thermal == "conjugate" \
+                else AdiabaticWall()
+            sensors = lsu_fiber_sensors(DEPTHS_FT) if thermal == "conjugate" \
+                else lsu_fiber_sensors(DEPTHS_FT, casing_external=False)
+            m = WellboreModel(geometry=GEOM, choke=CHOKE, eos=eos_f(),
+                              gravity=True, friction=True, n_cells=N,
+                              wall_model=wall)
+            r = m.solve(P0, T0, T_END, init="hydrostatic", n_snapshots=301,
+                        hist_stride=50, sensors=sensors)
+            with open(ckpt, "wb") as f:
+                pickle.dump(r, f)
         runs[key] = r
         entry = r.two_phase_entry
         report[key] = {
@@ -96,10 +105,17 @@ print("[waves] early-time runs", flush=True)
 waves = {}
 for fluid, eos_f in (("co2", lambda: SpanWagnerCO2()),
                      ("n2", lambda: NITROGEN)):
+    ckpt = CO2DIR / f"ckpt_wave_{fluid}.pkl"
+    if ckpt.exists():
+        with open(ckpt, "rb") as f:
+            waves[fluid] = pickle.load(f)
+        continue
     m = WellboreModel(geometry=GEOM, choke=CHOKE, eos=eos_f(), gravity=True,
                       friction=True, n_cells=600)
     waves[fluid] = m.solve(P0, T0, 10.0, init="hydrostatic",
                            n_snapshots=200, hist_stride=5)
+    with open(ckpt, "wb") as f:
+        pickle.dump(waves[fluid], f)
 
 # ---------------------------------------------------------------- CO2 set
 print("[post] CO2 figure set + CSV", flush=True)
