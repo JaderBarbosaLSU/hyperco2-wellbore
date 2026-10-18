@@ -140,6 +140,46 @@ diameter $d_c = \SI{12.7}{mm}$ and discharge coefficient $C_d$ at the
 wellhead is opened instantaneously to an external environment at back
 pressure $p_b = \SI{101.325}{kPa}$.
 
+\Cref{fig:well-schematic} reproduces the facility design schematic of
+the well: the vertical and cross-sectional views with the full casing
+program, and the inner completion. The complete well extends to a
+measured depth of \SI{8409}{ft} with a horizontal section, but a
+9-5/8\,in bridge plug at \SI{2000}{ft} isolates the upper vertical
+interval that constitutes the present computational domain: the
+pressurized fluid occupies the 7-5/8\,in CRA inner casing from the
+wellhead to the bridge plug, which is the closed bottom boundary of
+\cref{sec:bc-bottom}. The 2-7/8\,in tubing, 1\,in injection line,
+gauge carriers, and control lines visible inside the inner casing in
+\cref{fig:well-completion} are not yet represented hydraulically or
+thermally (a documented limitation, \cref{sec:outlook}); the optic
+fibers shown are the physical counterparts of the virtual sensors of
+\cref{sec:sensors}. The radial completion stack used by the conjugate
+thermal model (\cref{tab:stack}) is read directly from the casing
+table of \cref{fig:well-schematic}.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{well_schematic.png}
+\caption{LSU \co\ research well (CCUS well): vertical view with the
+casing program and depths, cross-sectional view, and casing/borehole
+size table. From the facility design documentation. The present model
+covers the upper \SI{2000}{ft} vertical interval above the bridge
+plug, inside the 7-5/8\,in inner casing.}
+\label{fig:well-schematic}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.78\textwidth]{well_completion.png}
+\caption{Inner completion design of the upper interval (facility
+design documentation): 7-5/8\,in inner casing, 2-7/8\,in tubing with
+side-pocket-mandrel P\&T gauges, 1\,in injection line, optic fibers,
+downhole control valve, and the bridge plug at \SI{2000}{ft} that
+forms the closed bottom of the computational domain. The internal
+hardware is not yet represented in the model.}
+\label{fig:well-completion}
+\end{figure}
+
 \paragraph{Coordinate system and sign conventions.} The axial coordinate
 $z$ is measured \emph{upward} from the closed bottom ($z=0$) to the
 wellhead ($z=L$); velocity $u$ is positive upward (toward the wellhead).
@@ -946,7 +986,9 @@ couplings for verification.
 
 The conjugate model attaches to every axial cell $j$ a one-dimensional
 radial thermal network representing the concentric completion of the
-LSU \co\ research well over its upper \SI{2000}{ft} (\cref{tab:stack}).
+LSU \co\ research well over its upper \SI{2000}{ft} (\cref{tab:stack};
+cf.\ the cross-sectional view and casing table of
+\cref{fig:well-schematic}).
 Only the 7-5/8\,in inner casing contains the pressurized fluid; the
 annulus between the 7-5/8\,in and 13-3/8\,in casings is air-filled, and
 the outer annuli are cemented to surface. The 30\,in conductor (upper
@@ -1715,8 +1757,9 @@ the sound speeds.}
 
 The LSU well instrumentation motivates a dedicated output layer:
 distributed temperature sensing (DTS) along the bore and a fiber on
-the outside of the 13-3/8\,in casing. The model samples \emph{virtual
-sensors} at the corresponding locations: depths
+the outside of the 13-3/8\,in casing (cf.\ the optic-fiber runs in
+\cref{fig:well-schematic,fig:well-completion}). The model samples
+\emph{virtual sensors} at the corresponding locations: depths
 $\zeta \in \{50, 500, 1000, 1500, 1950\}\,\si{ft}$, at two
 \emph{radial} stations --- in the fluid (bore DTS) and on the
 13-3/8\,in casing outer surface (external fiber), the latter
