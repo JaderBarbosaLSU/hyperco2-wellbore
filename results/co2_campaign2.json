@@ -1,0 +1,135 @@
+{
+  "parameters": {
+    "T_surface_K": 305.4,
+    "geothermal_gradient_K_per_m": 0.0255,
+    "p_wellhead_Pa": 5000000.0,
+    "T_uniform_K": 300.0,
+    "initial_T_at_depth_K": {
+      "0 ft": 305.4,
+      "500 ft": 309.3,
+      "1000 ft": 313.2,
+      "1500 ft": 317.1,
+      "2000 ft": 320.9
+    }
+  },
+  "co2_conjugate_hem": {
+    "n_steps": 561490,
+    "wall_time_s": 1963.2,
+    "mass_balance_error": -1.695627819789029e-14,
+    "energy_balance_error": -2.099918838180001e-14,
+    "T_wellhead_min_K": 288.08337557075504,
+    "mass_end_kg": 44.231302519639115,
+    "heat_input_MJ": 137.883,
+    "t_end_reached_s": 3600.0,
+    "two_phase_entry": null,
+    "min_sat_margin_K": 2.8436451961306375,
+    "min_sat_margin_at": {
+      "t_s": 481.81059102644883,
+      "depth_m": 608.5840000000001
+    },
+    "choke_flashing_fraction": 0.14069456812110417,
+    "throat_quality_range": [
+      0.9480784494724992,
+      0.9996461783797957
+    ]
+  },
+  "co2_adiabatic_hem": {
+    "n_steps": 23372,
+    "wall_time_s": 78.6,
+    "mass_balance_error": 2.202114051674064e-16,
+    "energy_balance_error": 2.8667833968327655e-16,
+    "T_wellhead_min_K": 283.66252166936636,
+    "mass_end_kg": 1793.4281932932531,
+    "heat_input_MJ": 0.0,
+    "t_end_reached_s": 172.87335494695927,
+    "two_phase_entry": {
+      "t": 173.03922251105269,
+      "z": 1.016,
+      "depth": 608.5840000000001,
+      "p": 4863437.71430893,
+      "T": 286.2923713850925,
+      "rho": 150.488138743262,
+      "T_sat": 286.2924653247845
+    },
+    "min_sat_margin_K": 0.005204070775732816,
+    "min_sat_margin_at": {
+      "t_s": 172.87335494695927,
+      "depth_m": 608.5840000000001
+    },
+    "choke_flashing_fraction": 1.0,
+    "throat_quality_range": [
+      0.9284569016673105,
+      0.974513097652323
+    ]
+  },
+  "co2_conjugate_geo": {
+    "n_steps": 580738,
+    "wall_time_s": 1924.3,
+    "mass_balance_error": 1.2796123602695087e-14,
+    "energy_balance_error": -6.15390334942779e-14,
+    "T_wellhead_min_K": 299.48691900540086,
+    "mass_end_kg": 33.439029427191,
+    "heat_input_MJ": 109.112,
+    "t_end_reached_s": 3600.0,
+    "two_phase_entry": null,
+    "min_sat_margin_K": 14.227287134172627,
+    "min_sat_margin_at": {
+      "t_s": 808.6598162265145,
+      "depth_m": 606.552
+    },
+    "choke_flashing_fraction": 0.0
+  },
+  "co2_adiabatic_geo": {
+    "n_steps": 71256,
+    "wall_time_s": 234.1,
+    "mass_balance_error": -4.961762213289932e-15,
+    "energy_balance_error": 2.2709626857855434e-15,
+    "T_wellhead_min_K": 264.72535566904645,
+    "mass_end_kg": 1092.492823815888,
+    "heat_input_MJ": 0.0,
+    "t_end_reached_s": 502.75587991890046,
+    "two_phase_entry": {
+      "t": 502.7996427990224,
+      "z": 608.5840000000001,
+      "depth": 1.0159999999999627,
+      "p": 2769154.9306772356,
+      "T": 264.72162163488565,
+      "rho": 74.81038552719863,
+      "T_sat": 264.72172074516175
+    },
+    "min_sat_margin_K": 0.0016087181367652192,
+    "min_sat_margin_at": {
+      "t_s": 502.75587991890046,
+      "depth_m": 1.0159999999999627
+    },
+    "choke_flashing_fraction": 0.9143859649122807,
+    "throat_quality_range": [
+      0.9263350473979415,
+      0.9989729588625851
+    ]
+  },
+  "n2_conjugate_geo": {
+    "n_steps": 796424,
+    "wall_time_s": 705.2,
+    "mass_balance_error": 2.0471062199248315e-14,
+    "energy_balance_error": 6.241219424192664e-14,
+    "T_wellhead_min_K": 300.45399788050577,
+    "mass_end_kg": 15.795288279956832,
+    "heat_input_MJ": 63.201,
+    "t_end_reached_s": 3600.0,
+    "two_phase_entry": null,
+    "choke_flashing_fraction": 0.0
+  },
+  "n2_adiabatic_geo": {
+    "n_steps": 563005,
+    "wall_time_s": 268.0,
+    "mass_balance_error": 3.0272135503996337e-12,
+    "energy_balance_error": -7.532110274873249e-12,
+    "T_wellhead_min_K": 103.24320820549545,
+    "mass_end_kg": 49.177019820441465,
+    "heat_input_MJ": 0.0,
+    "t_end_reached_s": 3600.0,
+    "two_phase_entry": null,
+    "choke_flashing_fraction": 0.0
+  }
+}
