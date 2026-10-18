@@ -13,3 +13,8 @@ paper/main.out
 paper/main.fls
 paper/main.fdb_latexmk
 paper/build.log
+results/co2/ckpt_*.pkl
+results/co2_stage2/ckpt_*.pkl
+results/co2/co2_csv_export.zip
+results/*.log
+results/co2run*.log

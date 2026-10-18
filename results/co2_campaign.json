@@ -1,0 +1,58 @@
+{
+  "co2_conjugate": {
+    "n_steps": 560937,
+    "wall_time_s": 2063.2,
+    "mass_balance_error": 4.624439508515534e-15,
+    "energy_balance_error": -1.6125656607184307e-14,
+    "T_wellhead_min_K": 288.08507322241434,
+    "mass_end_kg": 45.19941714750483,
+    "heat_input_MJ": 137.824,
+    "min_sat_margin_K": 3.000604786115673,
+    "two_phase_entry": null,
+    "t_end_reached_s": 3600.0
+  },
+  "co2_adiabatic": {
+    "n_steps": 26083,
+    "wall_time_s": 93.8,
+    "mass_balance_error": 0.0,
+    "energy_balance_error": -7.166958492081915e-16,
+    "T_wellhead_min_K": 283.70119292297176,
+    "mass_end_kg": 1793.7332384691558,
+    "heat_input_MJ": 0.0,
+    "min_sat_margin_K": 0.0046483533545824685,
+    "two_phase_entry": {
+      "t": 193.31659792504612,
+      "z": 1.016,
+      "depth": 608.5840000000001,
+      "p": 4863440.506612683,
+      "T": 286.29241258777915,
+      "rho": 150.48820691117734,
+      "T_sat": 286.29248889618646
+    },
+    "t_end_reached_s": 193.06765183710715
+  },
+  "n2_conjugate": {
+    "n_steps": 785338,
+    "wall_time_s": 708.8,
+    "mass_balance_error": 6.481760654285689e-14,
+    "energy_balance_error": -2.620242015924859e-14,
+    "T_wellhead_min_K": 289.3941918011454,
+    "mass_end_kg": 16.411035748194063,
+    "heat_input_MJ": 65.158,
+    "min_sat_margin_K": null,
+    "two_phase_entry": null,
+    "t_end_reached_s": 3600.0
+  },
+  "n2_adiabatic": {
+    "n_steps": 546931,
+    "wall_time_s": 246.3,
+    "mass_balance_error": 4.318684397678306e-12,
+    "energy_balance_error": -5.522651343939626e-12,
+    "T_wellhead_min_K": 96.73268472558428,
+    "mass_end_kg": 52.817159651066575,
+    "heat_input_MJ": 0.0,
+    "min_sat_margin_K": null,
+    "two_phase_entry": null,
+    "t_end_reached_s": 3600.0
+  }
+}
