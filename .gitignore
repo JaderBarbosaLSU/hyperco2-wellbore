@@ -21,3 +21,4 @@ results/co2run*.log
 results/co2*/*.zip
 paper/hyperco2-paper-figures.zip
 paper/main.pdf
+paper/main.toc
