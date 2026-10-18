@@ -378,7 +378,14 @@ class SpanWagnerCO2:
         h0 = st.hmass()
 
         def G(pt):
-            rho, h = self._rho_h_s(float(pt), s0)
+            """Nozzle mass flux; 0.0 where the throat state is outside
+            the single-phase/EOS-validity region (e.g. the isentrope
+            reaches the Span-Wagner Tmin = 216.6 K near the sublimation
+            region during deep expansion to atmospheric back pressure)."""
+            try:
+                rho, h = self._rho_h_s(float(pt), s0)
+            except ValueError:
+                return 0.0
             dh = max(h0 - h, 0.0)
             return rho * np.sqrt(2.0 * dh)
 
@@ -398,7 +405,22 @@ class SpanWagnerCO2:
             # stagnation state itself at/inside the dome boundary
             self.last_choke_dome_limited = True
             return float(G(p0 * 0.999)), True
-        res = minimize_scalar(lambda pt: -G(pt), bounds=(lo, p0 * 0.999),
+        # validity-guarded bracketed maximization: coarse log scan first
+        # (G = 0 marks states outside the single-phase/EOS region), then
+        # bounded refinement within the best valid bracket
+        pts = np.geomspace(lo, p0 * 0.999, 15)
+        Gs = np.array([G(pt) for pt in pts])
+        imax = int(np.argmax(Gs))
+        if Gs[imax] <= 0.0:
+            self.last_choke_dome_limited = True
+            return 0.0, False
+        blo = pts[max(imax - 1, 0)]
+        bhi = pts[min(imax + 1, pts.size - 1)]
+        if (imax > 0 and Gs[imax - 1] == 0.0):
+            # bordered by an invalid region: choke limited by the
+            # phase/EOS boundary rather than the sonic condition
+            self.last_choke_dome_limited = True
+        res = minimize_scalar(lambda pt: -G(pt), bounds=(blo, bhi),
                               method="bounded",
                               options={"xatol": max(1e-4 * p0, 100.0)})
         p_star = float(res.x)
