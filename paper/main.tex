@@ -70,7 +70,8 @@ $0.95$--$1.0$) and the adiabatic wellbore reaches saturation at the
 bottom within \SI{173}{s}, whereas with the geothermal summer
 initialization and the coupled thermal model the entire system ---
 wellbore and choke throat --- remains single phase for the full
-one-hour transient with a minimum saturation margin of \SI{14.2}{K}.
+one-hour transient with a minimum saturation margin of
+\SI{25.6}{\degree F} (\SI{14.2}{K}).
 \end{abstract}
 
 \tableofcontents
@@ -185,8 +186,19 @@ $z$ is measured \emph{upward} from the closed bottom ($z=0$) to the
 wellhead ($z=L$); velocity $u$ is positive upward (toward the wellhead).
 Depth below the wellhead is denoted $\zeta = L - z$, so that the
 geothermal profile of \cref{sec:ic-temperature} reads
-$T = T_s + \Gamma\,\zeta$ with $\Gamma > 0$. All figures plot depth
-$\zeta$ increasing downward.
+$T = T_s + \Gamma\,\zeta$ with $\Gamma > 0$. All spatial results are
+reported exclusively in terms of the depth $\zeta$, plotted increasing
+downward; the upward coordinate $z$ appears only in the governing
+equations.
+
+\paragraph{Units convention.} Results are reported in US customary
+units --- psi, \si{\degree F}, ft/s, lbm/s, ft --- as the primary
+scales of every figure, with the SI equivalents carried on the
+secondary scales (upper abscissae and right ordinates). Temperature
+\emph{differences} (saturation margins) convert as
+$\SI{1}{K} = \SI{1.8}{\degree F}$. In the text, results quote US
+customary first with SI in parentheses; model formulation,
+correlations, and verification metrics remain in SI.
 
 Two working fluids are considered on identical geometry, grid, choke,
 and output cadence: nitrogen (ideal gas) as the baseline, and \co\ with
@@ -473,7 +485,8 @@ compression raises $T_{\mathrm{sat}}(p)$ with depth: the uniform
 column's saturation margin \emph{decreases} downhole (from \SI{12.6}{K}
 at the wellhead to \SI{6.5}{K} at bottom), whereas the geothermal
 gradient more than compensates, giving margins that \emph{increase}
-from \SI{18.0}{K} to \SI{27.6}{K} top to bottom.
+from 32.4 to \SI{49.7}{\degree F} (18.0 to \SI{27.6}{K}) top to
+bottom.
 
 \begin{table}[htb]
 \centering
@@ -482,18 +495,18 @@ $\Gamma = \SI{25.5}{K/km}$): initial fluid temperature and, for \co\
 at \SI{5}{MPa} wellhead pressure (hydrostatic), the local pressure and
 saturation margin. Depths include the fiber-optic sensor stations.}
 \label{tab:geoT}
-\begin{tabular}{S[table-format=4.0]cS[table-format=3.1]S[table-format=1.3]S[table-format=2.1]}
+\begin{tabular}{cccc}
 \toprule
-{Depth [ft]} & {Depth [m]} & {$T(\zeta,0)$ [K]} & {$p(\zeta,0)$ [MPa]} &
-{$m(\zeta,0)$ [K]}\\
+Depth $\zeta$ [ft] & $T(\zeta,0)$ [\si{\degree F}\,(K)] &
+$p(\zeta,0)$ [psi\,(MPa)] & $m(\zeta,0)$ [\si{\degree F}\,(K)]\\
 \midrule
-0    & 0     & 305.4 & 5.000 & 18.0\\
-50   & 15.2  & 305.8 & 5.017 & 18.2\\
-500  & 152.4 & 309.3 & 5.179 & 20.3\\
-1000 & 304.8 & 313.2 & 5.372 & 22.8\\
-1500 & 457.2 & 317.1 & 5.561 & 25.3\\
-1950 & 594.4 & 320.6 & 5.727 & 27.4\\
-2000 & 609.6 & 320.9 & 5.745 & 27.6\\
+0    & 90.0 (305.4)  & 725 (5.000) & 32.4 (18.0)\\
+50   & 90.8 (305.8)  & 728 (5.017) & 32.8 (18.2)\\
+500  & 97.1 (309.3)  & 751 (5.179) & 36.5 (20.3)\\
+1000 & 104.1 (313.2) & 779 (5.372) & 41.0 (22.8)\\
+1500 & 111.1 (317.1) & 807 (5.561) & 45.5 (25.3)\\
+1950 & 117.4 (320.6) & 831 (5.727) & 49.3 (27.4)\\
+2000 & 117.9 (320.9) & 833 (5.745) & 49.7 (27.6)\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1492,15 +1505,16 @@ $2L/a_0 \approx \SI{3.4}{s}$; because the choke passes only a small
 fraction of the sonic pipe flux, the wellhead acts as a nearly closed
 end and the wave re-reflects as an expansion, producing a staircase
 depressurization of period $2L/a_0$ with steps of
-$\mathcal{O}(\SI{130}{kPa})$. The initial wave is weak relative to
-the inventory ($\rho a\,\Delta u \sim \SI{150}{kPa}$ against
-\SI{13.79}{MPa}) and the subsequent discharge is quasi-static,
+${\approx}\SI{19}{psi}$ (\SI{130}{kPa}). The initial wave is weak
+relative to the inventory ($\rho a\,\Delta u \sim \SI{22}{psi}$
+against \SI{2000}{psi}) and the subsequent discharge is quasi-static,
 consistent with the lumped-vessel agreement of \cref{sec:vv-model}.
 \Cref{fig:profiles,fig:histories} show the field evolution: the
 column depressurizes nearly uniformly, the velocity profile is linear
-in $z$ --- the signature of spatially uniform expansion --- with
+in depth --- the signature of spatially uniform expansion --- with
 superposed decaying acoustic oscillations, and expansion work cools
-the inventory to \SI{127}{K} by \SI{600}{s}, essentially the nitrogen
+the inventory to \SI{-231}{\degree F} (\SI{127}{K}) by \SI{600}{s},
+essentially the nitrogen
 critical temperature; the ideal-gas closure is thus increasingly
 strained exactly where the adiabatic blowdown ends, one motivation
 for the real-fluid stage.
@@ -1508,10 +1522,10 @@ for the real-fluid stage.
 \begin{figure}[htb]
 \centering
 \includegraphics[width=0.8\textwidth]{blowdown_xt.png}
-\caption{$x$--$t$ diagram of the pressure perturbation
-$p - p_{\mathrm{init}}(z)$ during the first \SI{8}{s} (N$_2$ baseline,
-hydrostatic initialization): descending expansion wave, bottom
-reflection, staircase reverberation of period $2L/a_0$.}
+\caption{Depth--time diagram of the pressure perturbation
+$p - p_{\mathrm{init}}(\zeta)$ during the first \SI{8}{s} (N$_2$
+baseline, hydrostatic initialization): descending expansion wave,
+bottom reflection, staircase reverberation of period $2L/a_0$.}
 \label{fig:xt}
 \end{figure}
 
@@ -1539,8 +1553,9 @@ geometry (bore ID \SI{170.3}{mm}, 12.7\,mm choke, N$_2$,
 \SI{13.79}{MPa}) over \SI{1800}{s}. The outcome is not a small
 correction: heat ingress from the completion and formation nearly
 suppresses the expansion cooling --- minimum wellhead temperature
-\SI{283.6}{K} (coupled) and \SI{290.2}{K} (prescribed $T_w$) against
-\SI{124.0}{K} (adiabatic). The warmer inventory sustains a higher
+\SI{50.8}{\degree F} (\SI{283.6}{K}, coupled) and
+\SI{62.7}{\degree F} (\SI{290.2}{K}, prescribed $T_w$) against
+\SI{-236.5}{\degree F} (\SI{124.0}{K}, adiabatic). The warmer inventory sustains a higher
 pressure at equal mass, so the heated cases also discharge measurably
 faster. \Cref{fig:radial} locates the controlling resistances: of the
 total fluid-to-formation temperature difference, roughly \SI{3}{K}
@@ -1584,13 +1599,15 @@ geometry, 12.7\,mm choke, $N=300$, \SI{3600}{s}), each with coupled
 and adiabatic walls. The principal quantitative contrasts, with their
 causes:
 \begin{itemize}
-\item \emph{Inventory}: \SI{2064}{kg} of \co\ against \SI{807}{kg}
-of N$_2$ --- a factor 2.56, the product of the molar-mass ratio
+\item \emph{Inventory}: \SI{4551}{lbm} (\SI{2064}{kg}) of \co\
+against \SI{1779}{lbm} (\SI{807}{kg}) of N$_2$ --- a factor 2.56,
+the product of the molar-mass ratio
 (1.57) and the compressibility loading $1/Z$ at $Z = 0.687$ (1.46,
 with a small hydrostatic correction). Real-gas attraction packs
 substantially more \co\ into the same volume than any ideal estimate.
-\item \emph{Initial discharge}: \SI{1.71}{kg/s} (\co) against
-\SI{1.22}{kg/s} (N$_2$), factor 1.40 --- the critical flux scales as
+\item \emph{Initial discharge}: \SI{3.8}{lbm/s} (\SI{1.71}{kg/s},
+\co) against \SI{2.7}{lbm/s} (\SI{1.22}{kg/s}, N$_2$), factor 1.40
+--- the critical flux scales as
 $\sqrt{\rho_0 p_0}$, so the density advantage enters only under a
 square root, and the real-gas enhancement (1.17 over ideal \co)
 contributes the rest.
@@ -1599,23 +1616,26 @@ rate, $2.56/1.40 \approx 1.8$, stretches the \co\ blowdown clock
 accordingly (visible in the $M/M_0$ panel); both wells still reach
 ${\sim}2\,\%$ inventory within the hour.
 \item \emph{Cooling}: with the coupled wall, minimum wellhead
-temperatures are \SI{288.1}{K} (\co) and \SI{289.4}{K} (N$_2$) ---
+temperatures are \SI{59.0}{\degree F} (\SI{288.1}{K}, \co) and
+\SI{61.2}{\degree F} (\SI{289.4}{K}, N$_2$) ---
 formation heat ingress nearly cancels the expansion cooling for both
 --- but the heat drawn differs strongly: \SI{137.8}{MJ} (\co) against
 \SI{65.2}{MJ} (N$_2$), reflecting the larger mass and the higher
 $c_p$ (${\sim}\SI{1803}{}$ vs ${\sim}\SI{1039}{J/(kg.K)}$ at the
-initial state). Adiabatically, N$_2$ cools freely to \SI{96.7}{K},
-while \co\ never gets the chance (next item).
+initial state). Adiabatically, N$_2$ cools freely to
+\SI{-285.6}{\degree F} (\SI{96.7}{K}), while \co\ never gets the
+chance (next item).
 \item \emph{Single-phase validity}: the coupled \co\ case remains
 single phase throughout, but barely --- minimum saturation margin
-\SI{3.0}{K}, at the \emph{bottom} of the well. The adiabatic \co\
-case is halted by the monitor at $t = \SI{173}{s}$ (HEM choke; 193~s
-with the earlier single-phase-bound choke) with first dome entry at
-the bottom (\SI{608.6}{m}, \SI{4.863}{MPa}, \SI{286.3}{K}). The
-bottom location is the hydrostatic-margin effect of
-\cref{sec:ic-temperature}: compression raises $T_{\mathrm{sat}}$
-downhole, so the uniform column's thinnest margin is at depth and
-bulk expansion cooling consumes it first.
+\SI{5.1}{\degree F} (\SI{2.84}{K}), at the \emph{bottom} of the
+well. The adiabatic \co\ case is halted by the monitor at
+$t = \SI{173}{s}$ (HEM choke; 193~s with the earlier
+single-phase-bound choke) with first dome entry at the bottom
+($\zeta = \SI{1997}{ft}$; \SI{705}{psi} / \SI{55.7}{\degree F},
+i.e.\ \SI{4.863}{MPa} / \SI{286.3}{K}). The bottom location is the
+hydrostatic-margin effect of \cref{sec:ic-temperature}: compression
+raises $T_{\mathrm{sat}}$ downhole, so the uniform column's thinnest
+margin is at depth and bulk expansion cooling consumes it first.
 \item \emph{Choke flashing}: the uniform-IC \co\ choke is in HEM
 regimes 3--4 from the first instant: throat quality $0.95$--$1.0$ for
 the first \SI{9.6}{min} of the coupled run (then the throat dries),
@@ -1649,20 +1669,22 @@ trajectories against the saturation curve; \cref{fig:choke-hem} shows
 the HEM choke behavior. The outcome:
 \begin{enumerate}
 \item \emph{Uniform \SI{300}{K}, coupled}: single phase for the full
-hour with minimum margin \SI{2.84}{K} at the bottom at
-$t = \SI{482}{s}$; the choke flashes for the first \SI{9.6}{min}.
+hour with minimum margin \SI{5.1}{\degree F} (\SI{2.84}{K}) at the
+bottom at $t = \SI{482}{s}$; the choke flashes for the first
+\SI{9.6}{min}.
 Workable, but the margin is thin and entirely owed to formation heat
 ingress.
 \item \emph{Uniform \SI{300}{K}, adiabatic}: dome entry at
 \SI{173}{s} at the bottom. Flagged and halted.
 \item \emph{Geothermal, coupled} --- the preferred configuration:
-single phase throughout with minimum margin \SI{14.2}{K}
-($t = \SI{809}{s}$, near bottom), wellhead temperature never below
-\SI{299.5}{K}, and the choke \emph{never} flashes (the warmer
-stagnation states keep the nozzle sonic point dry). Formation heat
-ingress \SI{109.1}{MJ}.
+single phase throughout with minimum margin \SI{25.6}{\degree F}
+(\SI{14.2}{K}; $t = \SI{809}{s}$, near bottom), wellhead temperature
+never below \SI{79.4}{\degree F} (\SI{299.5}{K}), and the choke
+\emph{never} flashes (the warmer stagnation states keep the nozzle
+sonic point dry). Formation heat ingress \SI{109.1}{MJ}.
 \item \emph{Geothermal, adiabatic}: dome entry at \SI{503}{s} --- at
-the \emph{wellhead} this time (\SI{2.77}{MPa}, \SI{264.7}{K}). The
+the \emph{wellhead} this time (\SI{402}{psi} / \SI{16.8}{\degree F},
+i.e.\ \SI{2.77}{MPa} / \SI{264.7}{K}). The
 geothermal gradient removes the weak point at the bottom, so
 sustained expansion cooling wins first where the initial temperature
 is lowest. The initialization delays first entry by a factor 2.9 but
@@ -1675,7 +1697,7 @@ at the geothermal initialization.
 The margin maps make the mechanism legible: the critical window is
 the first 10--20 minutes; once the depressurization transient has
 passed and the discharge rate has fallen, heat ingress dominates and
-margins grow beyond \SI{40}{K} everywhere. The engineering summary is
+margins grow beyond \SI{72}{\degree F} (\SI{40}{K}) everywhere. The engineering summary is
 that \emph{the coupled thermal path plus a summer-warm initial column
 keeps the entire system --- wellbore and choke throat --- comfortably
 single phase for this choke size}; the HEM choke extension is the
@@ -1699,7 +1721,8 @@ and adiabatic (dotted) walls.}
 \caption{\co\ saturation-margin field $m(z,t) = T -
 T_{\mathrm{sat}}(p)$ for the four campaign cases. White regions in
 the adiabatic panels lie beyond the flagged dome entry
-($\times$ markers); the dashed line is the \SI{5}{K} contour.}
+($\times$ markers); the dashed line is the \SI{9}{\degree F}
+(\SI{5}{K}) contour.}
 \label{fig:margin-zt}
 \end{figure}
 
@@ -1735,9 +1758,10 @@ single-phase throat). The geothermal case never flashes.}
 expansion wave at the geothermal initialization (600 cells). The
 \co\ wave arrives at ${\sim}\SI{2.7}{s}$ against ${\sim}\SI{1.7}{s}$
 for N$_2$: the \co\ sound speed at the initial state
-(${\approx}\SI{223}{m/s}$ at \SI{5}{MPa}/\SI{300}{K}) is depressed
-well below both the nitrogen value (${\approx}\SI{353}{m/s}$) and its
-own ideal-gas estimate ($\sqrt{\gamma R T} \approx \SI{270}{m/s}$) by
+(${\approx}\SI{732}{ft/s}$, \SI{223}{m/s}) is depressed well below
+both the nitrogen value (${\approx}\SI{1158}{ft/s}$, \SI{353}{m/s})
+and its own ideal-gas estimate
+($\sqrt{\gamma R T} \approx \SI{886}{ft/s}$, \SI{270}{m/s}) by
 real-gas attraction as the state approaches the critical region ---
 the same non-ideality that raises the density. The reverberation
 period and the staircase structure scale accordingly.
@@ -1776,9 +1800,10 @@ profiles at selected times with the sensor depths marked; and
 \cref{fig:cmp-sensors} the N$_2$/\co\ bore-DTS comparison at two
 depths (uniform IC). Three observations carry over from the nitrogen
 phase and sharpen for \co: (i)~the bore DTS tracks the full transient
-with excursions of a few kelvin in coupled cases; (ii)~the external
-13-3/8\,in fiber is nearly isolated from the transient by the air
-annulus --- excursions below \SI{0.5}{K} in \SI{30}{min} --- so it
+with excursions of a few \si{\degree F} in coupled cases; (ii)~the
+external 13-3/8\,in fiber is nearly isolated from the transient by
+the air annulus --- excursions below \SI{1}{\degree F}
+(\SI{0.5}{K}) in \SI{30}{min} --- so it
 measures the completion's slow thermal depletion, not the fluid
 transient; a measurable deviation on that fiber would indicate an
 annulus condition different from the air-filled assumption (e.g.\
@@ -1828,10 +1853,11 @@ numerical results are diagnosed, not cosmetically filtered.
 the first seconds (left panels) the profile is the superposition of
 the growing linear expansion profile and the descending/reverberating
 wave fronts --- sharp but grid-converged structures (peak
-perturbation velocities 1.18/1.20/\SI{1.21}{m/s} at 200/400/1200
-cells in the nitrogen study), i.e.\ \emph{physics}, not oscillatory
-error: the staircase reverberation of \cref{fig:xt} seen in velocity.
-At late times (right panels) the profile is linear in $z$ ---
+perturbation velocities 3.87/3.94/\SI{3.97}{ft/s}, i.e.\
+1.18/1.20/\SI{1.21}{m/s}, at 200/400/1200 cells in the nitrogen
+study), i.e.\ \emph{physics}, not oscillatory error: the staircase
+reverberation of \cref{fig:xt} seen in velocity. At late times
+(right panels) the profile is linear in depth ---
 spatially uniform expansion --- with small residual acoustic ripples
 that decay on the frictional time scale: with the Churchill friction
 model active the late-time ripple amplitude is damped by roughly two
@@ -1845,10 +1871,9 @@ fluid needs less velocity for the same mass flux.
 \centering
 \includegraphics[width=\textwidth]{velocity_n2.png}\\[2pt]
 \includegraphics[width=\textwidth]{velocity_co2.png}
-\caption{Velocity profiles, unsmoothed, during the early acoustic
-phase (left) and the quasi-static discharge (right): N$_2$ (top,
-uniform IC) and \co\ (bottom, geothermal IC, coupled). Insets zoom
-the wellhead region at late times.}
+\caption{Velocity profiles versus depth, unsmoothed, during the
+early acoustic phase (left) and the quasi-static discharge (right):
+N$_2$ (top, uniform IC) and \co\ (bottom, geothermal IC, coupled).}
 \label{fig:velocity}
 \end{figure}
 
@@ -1974,14 +1999,16 @@ every reported run.
 The physical findings: (i)~at matched \SI{5}{MPa}/\SI{300}{K}
 conditions \co\ stores $2.56\times$ the nitrogen mass but discharges
 only $1.40\times$ faster, with a correspondingly longer blowdown and
-a slower acoustic clock ($a \approx 223$ vs \SI{353}{m/s});
+a slower acoustic clock ($a \approx 732$ vs \SI{1158}{ft/s}, i.e.\
+223 vs \SI{353}{m/s});
 (ii)~formation heat ingress, not fluid inertia, is what keeps the
 cooling \co\ out of the vapor dome --- adiabatically the dome is
 reached in minutes regardless of initialization; (iii)~the
 geothermal summer initialization converts a marginal single-phase
-case (\SI{2.8}{K} minimum margin, flashing choke) into a comfortable
-one (\SI{14.2}{K}, dry choke), and relocates the eventual adiabatic
-failure point from bottomhole to wellhead; (iv)~the HEM choke
+case (\SI{5.1}{\degree F} / \SI{2.8}{K} minimum margin, flashing
+choke) into a comfortable one (\SI{25.6}{\degree F} / \SI{14.2}{K},
+dry choke), and relocates the eventual adiabatic failure point from
+bottomhole to wellhead; (iv)~the HEM choke
 correction is small where the throat barely enters the dome
 ($+1.4\,\%$ at the initial state) but is the element that makes the
 cold-column cases well-posed at all; (v)~the external 13-3/8\,in
