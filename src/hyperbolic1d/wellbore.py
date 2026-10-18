@@ -211,6 +211,71 @@ def wellhead_face_state(eos: IdealGasEOS, rho_i, u_i, p_i, choke: ChokeValve,
     return rho_f, u_f, pf, mdot, choked
 
 
+def wellhead_face_state_general(eos, rho_i, u_i, p_i, choke: ChokeValve,
+                                A_pipe: float):
+    """Choke boundary condition for an arbitrary EOS (real-fluid path).
+
+    Same two conditions as the ideal-gas version — C+ invariant +
+    isentrope to the face, valve mass balance with the stagnation-fed
+    isentropic-nozzle flux — but evaluated through the EOS interface:
+    the invariant integral by quadrature, the stagnation state from
+    (h0, s), and the nozzle flux by maximization over the throat
+    pressure. Because h0 and s are invariant along the face isentrope,
+    the valve demand Cd*At*G is computed ONCE per call; the residual
+    reduces to matching the pipe supply rho_f(p_f) u_f(p_f) A to it.
+
+    Returns (rho_f, u_f, p_f, mdot, choked).
+    """
+    p0, T0, s, h0 = eos.stagnation_from_state(float(p_i), float(rho_i),
+                                              float(u_i))
+    if p0 <= choke.p_back * (1.0 + 1e-12) or choke.effective_area <= 0.0:
+        return rho_i, 0.0, p_i, 0.0, False
+    G, choked = eos.orifice_mass_flux(p0, T0, choke.p_back)
+    demand = choke.effective_area * G
+
+    p_lo = 0.2 * p_i
+    p_dome = getattr(eos, "saturation_pressure_for_entropy", lambda s: None)(s)
+    if p_dome is not None:
+        p_lo = max(p_lo, p_dome * 1.002)
+    p_lo = min(p_lo, p_i * 0.999)
+
+    def face(pf):
+        rho_f = eos.isentrope(pf, p_i, rho_i)
+        u_f = eos.riemann_invariant_velocity(pf, p_i, rho_i, u_i)
+        return rho_f, u_f
+
+    def supply(pf):
+        rho_f, u_f = face(pf)
+        return rho_f * u_f * A_pipe
+
+    # sonic/dome cap: the supply is evaluated at the lowest admissible
+    # face pressure; if the valve demands more, the face runs at the cap
+    if supply(p_lo) <= demand:
+        rho_f, u_f = face(p_lo)
+        a_f = eos.sound_speed(p_lo, rho_f)
+        u_f = min(u_f, a_f)            # no supersonic pipe exit
+        pf = p_lo
+    elif supply(p_i) >= demand:
+        # compression branch: face pressure above interior pressure
+        hi = p0 * (1.0 + 1e-9)
+        tries = 0
+        while supply(hi) > demand and tries < 6:
+            hi *= 1.05
+            tries += 1
+        pf = brentq(lambda pp: supply(pp) - demand, p_i, hi,
+                    xtol=max(1e-5 * p_i, 1.0), rtol=1e-10)
+        rho_f, u_f = face(pf)
+    else:
+        pf = brentq(lambda pp: supply(pp) - demand, p_lo, p_i,
+                    xtol=max(1e-5 * p_i, 1.0), rtol=1e-10)
+        rho_f, u_f = face(pf)
+
+    if u_f < 0.0:
+        return rho_i, 0.0, p_i, 0.0, False
+    mdot = rho_f * u_f * A_pipe
+    return rho_f, u_f, pf, mdot, choked
+
+
 # ----------------------------------------------------------------------------
 # Model and driver
 # ----------------------------------------------------------------------------
@@ -229,6 +294,9 @@ class BlowdownResult:
     T_wellhead: np.ndarray
     choked: np.ndarray
     u_wellhead_face: np.ndarray | None = None   # choke face velocity
+    sat_margin_min: np.ndarray | None = None    # min T - T_sat over cells
+    two_phase_entry: dict | None = None         # first dome entry, if any
+    heat_input_J: float = 0.0                   # integral of wall heat
     sensor_t: np.ndarray | None = None
     sensor_data: dict | None = None             # name -> T(t) array
     sensor_fluid_extra: dict | None = None      # name -> {p, rho, u}
@@ -250,6 +318,10 @@ class WellboreModel:
     wall_model: object = field(default_factory=AdiabaticWall)
     n_cells: int = 400
     cfl: float = 0.8
+    # choke boundary recomputation stride: 1 for the (cheap) ideal-gas
+    # path; real-fluid runs may use 5-10 (the boundary state varies by
+    # O(1e-4) per step, so the induced error is far below grid error)
+    choke_update_stride: int = 1
 
     # ------------------------------------------------------------------
     def initial_state(self, p0: float, T0: float,
@@ -259,8 +331,23 @@ class WellboreModel:
         L = self.geometry.depth
         zc = (np.arange(self.n_cells) + 0.5) * (L / self.n_cells)
         if init == "hydrostatic" and self.gravity:
-            # isothermal column: p(z) = p0 * exp(g (L - z) / (R T0))
-            p = p0 * np.exp(G_EARTH * (L - zc) / (self.eos.R * T0))
+            if isinstance(self.eos, IdealGasEOS):
+                # isothermal ideal column: p = p0 exp(g (L - z)/(R T0));
+                # p0 is the wellhead pressure
+                p = p0 * np.exp(G_EARTH * (L - zc) / (self.eos.R * T0))
+            else:
+                # real fluid: integrate dp/dz = -rho(p, T0) g downward
+                # from the wellhead (midpoint rule per cell)
+                dz = L / self.n_cells
+                p = np.empty(self.n_cells)
+                pw = p0 * (1.0 + 0.0)
+                # wellhead face -> top cell center is dz/2
+                rho_w, _ = self.eos.rho_e_from_pT(pw, T0)
+                pc = pw + float(np.atleast_1d(rho_w)[0]) * G_EARTH * dz / 2
+                for j in range(self.n_cells - 1, -1, -1):
+                    p[j] = pc
+                    rho_c, _ = self.eos.rho_e_from_pT(pc, T0)
+                    pc = pc + float(np.atleast_1d(rho_c)[0]) * G_EARTH * dz
         else:
             p = np.full(self.n_cells, p0)
         T = np.full(self.n_cells, T0)
@@ -304,12 +391,21 @@ class WellboreModel:
               progress: Callable[[float, float], None] | None = None,
               ) -> BlowdownResult:
         eos = self.eos
-        g = eos.gamma
+        ideal = isinstance(eos, IdealGasEOS)
+        g = eos.gamma if ideal else None
+        monitor_sat = hasattr(eos, "saturation_margin")
         n = self.n_cells
         L = self.geometry.depth
         dz = L / n
         A = self.geometry.area
 
+        if hasattr(self, "_choke_cache"):
+            del self._choke_cache          # never reuse across solves
+        if hasattr(self, "_demand_cache"):
+            del self._demand_cache
+        # the real-fluid face solve is cheap and must track the boundary
+        # cell every step (stride caching destabilizes the boundary)
+        choke_stride = self.choke_update_stride if ideal else 1
         zc, V = self.initial_state(p0, T0, init)
         snap_times = np.linspace(0.0, t_end, n_snapshots)
         snaps = {"p": [], "T": [], "rho": [], "u": []}
@@ -328,7 +424,8 @@ class WellboreModel:
         conjugate = hasattr(self.wall_model, "advance")
         t_hist, mdot_hist, mass_hist, pwh_hist, Twh_hist, chk_hist = \
             [], [], [], [], [], []
-        uf_hist = []
+        uf_hist, satm_hist = [], []
+        two_phase_entry = None
         if sensors is not None:
             sensors.bind(zc, L, self.wall_model)
 
@@ -355,6 +452,21 @@ class WellboreModel:
             dt = self.cfl * dz / np.max(np.abs(u) + a)
             dt = min(dt, t_end - t)
 
+            # single-phase validity: checked EVERY step (vectorized table
+            # lookup) so the run stops before the boundary thermodynamics
+            # are asked for states inside the dome
+            if monitor_sat:
+                margin = eos.saturation_margin(p, T)
+                jm = int(np.argmin(margin))
+                if margin[jm] < 0.0:
+                    two_phase_entry = dict(
+                        t=float(t), z=float(zc[jm]),
+                        depth=float(L - zc[jm]),
+                        p=float(p[jm]), T=float(T[jm]),
+                        rho=float(rho[jm]),
+                        T_sat=float(T[jm] - margin[jm]))
+                    break
+
             # wall heat flux: one evaluation per step. Conjugate models
             # advance their internal radial networks here; stateless
             # models are evaluated on the current fields.
@@ -372,16 +484,20 @@ class WellboreModel:
 
             rg, ug, pg = gh(rho), gh(u, -1.0), gh(p)
 
-            # MUSCL-Hancock predictor (with gravity in the half step)
+            # MUSCL-Hancock predictor (with gravity in the half step).
+            # The pressure predictor uses rho*a^2 = (dp/drho)_s * rho,
+            # which equals gamma*p for an ideal gas and generalizes the
+            # acoustic coefficient for real fluids.
             sr = _limited_slopes(rg, "vanleer")
             su = _limited_slopes(ug, "vanleer")
             sp = _limited_slopes(pg, "vanleer")
             dtdx2 = 0.5 * dt / dz
+            ra2g = gh(rho * a * a)
             drho = -(ug * sr + rg * su) * dtdx2
             du = -(ug * su + sp / rg) * dtdx2
             if self.gravity:
                 du = du - G_EARTH * 0.5 * dt
-            dp = -(g * pg * su + ug * sp) * dtdx2
+            dp = -(ra2g * su + ug * sp) * dtdx2
             rL = np.maximum(rg + 0.5 * sr + drho, 1e-10)
             rR = np.maximum(rg - 0.5 * sr + drho, 1e-10)
             uL = ug + 0.5 * su + du
@@ -389,18 +505,94 @@ class WellboreModel:
             pL = np.maximum(pg + 0.5 * sp + dp, 1e-3)
             pR = np.maximum(pg - 0.5 * sp + dp, 1e-3)
 
+            if not ideal:
+                # reconstruct e and a as additional primitives (avoids
+                # per-face EOS inversions; the O(dz^2) thermodynamic
+                # mismatch of the face triple (rho, p, e) is standard
+                # practice for real-gas MUSCL schemes)
+                eg = gh(e)
+                ag = gh(a)
+                se = _limited_slopes(eg, "vanleer")
+                sa = _limited_slopes(ag, "vanleer")
+                de = -(ug * se + (pg / rg) * su) * dtdx2
+                eL = eg + 0.5 * se + de
+                eR = eg - 0.5 * se + de
+                aL = np.maximum(ag + 0.5 * sa, 1.0)
+                aR = np.maximum(ag - 0.5 * sa, 1.0)
+
             # exact solid wall at the bottom face: left state = mirror of the
             # reconstructed right state (guarantees zero mass/energy flux)
             rL[1], uL[1], pL[1] = rR[2], -uR[2], pR[2]
+            if not ideal:
+                eL[1], aL[1] = eR[2], aR[2]
 
-            F = _flux_hllc(rL[:-1], uL[:-1], pL[:-1],
-                           rR[1:], uR[1:], pR[1:], g)
+            if ideal:
+                F = _flux_hllc(rL[:-1], uL[:-1], pL[:-1],
+                               rR[1:], uR[1:], pR[1:], g)
+            else:
+                from .godunov import _flux_hllc_general
+                F = _flux_hllc_general(rL[:-1], uL[:-1], pL[:-1],
+                                       eL[:-1], aL[:-1],
+                                       rR[1:], uR[1:], pR[1:],
+                                       eR[1:], aR[1:])
             Fi = F[1:-1]                      # faces 0..n of the physical cells
 
             # wellhead face flux from the choke model (uses the last cell)
-            rho_f, u_f, p_f, mdot, choked = wellhead_face_state(
-                eos, rho[-1], u[-1], p[-1], self.choke, A)
-            E_f = p_f / (g - 1.0) + 0.5 * rho_f * u_f**2
+            if step % choke_stride == 0 or not hasattr(
+                    self, "_choke_cache"):
+                if ideal:
+                    rho_f, u_f, p_f, mdot, choked = wellhead_face_state(
+                        eos, rho[-1], u[-1], p[-1], self.choke, A)
+                    E_f = p_f / (g - 1.0) + 0.5 * rho_f * u_f**2
+                else:
+                    # Real-fluid path. The valve DEMAND (stagnation state
+                    # + real-gas orifice maximization) varies with the
+                    # slowly evolving interior state and is recomputed only
+                    # when the wellhead pressure has drifted; the SUPPLY
+                    # side must respond to the boundary cell EVERY step
+                    # (freezing the face flux over several steps was found
+                    # to destabilize the boundary cell) and is closed in
+                    # linearized characteristic form, which is accurate to
+                    # O((dp_face/(rho a^2))^2) ~ 1e-5 for choke-dominated
+                    # discharge.
+                    p_i, rho_i, u_i = p[-1], rho[-1], u[-1]
+                    a_i, e_i = a[-1], e[-1]
+                    dem = getattr(self, "_demand_cache", None)
+                    if dem is None or abs(p_i - dem[2]) > 2e-3 * dem[2]:
+                        p0, T0, _, _ = eos.stagnation_from_state(
+                            float(p_i), float(rho_i), float(u_i))
+                        if p0 <= self.choke.p_back * (1 + 1e-12):
+                            dem = (0.0, False, p_i)
+                        else:
+                            G, chk = eos.orifice_mass_flux(
+                                p0, T0, self.choke.p_back)
+                            dem = (self.choke.effective_area * G, chk, p_i)
+                        self._demand_cache = dem
+                    demand, choked, _ = dem
+                    if demand <= 0.0:
+                        rho_f, u_f, p_f, mdot = rho_i, 0.0, p_i, 0.0
+                        e_f = e_i
+                    else:
+                        q = demand / A       # required rho_f * u_f
+                        x = 0.0              # x = p_i - p_f
+                        for _ in range(4):   # Newton on the quadratic
+                            rho_fx = rho_i - x / (a_i * a_i)
+                            u_fx = u_i + x / (rho_i * a_i)
+                            fx = rho_fx * u_fx - q
+                            dfx = (rho_fx / (rho_i * a_i)
+                                   - u_fx / (a_i * a_i))
+                            x = x - fx / dfx
+                        p_f = p_i - x
+                        rho_f = rho_i - x / (a_i * a_i)
+                        u_f = min(u_i + x / (rho_i * a_i), 0.99 * a_i)
+                        mdot = rho_f * u_f * A
+                        # isentropic linearization of e at the face
+                        e_f = e_i + p_i / rho_i**2 * (rho_f - rho_i)
+                    E_f = rho_f * (e_f + 0.5 * u_f**2)
+                h0_f = ((E_f + p_f) / rho_f if rho_f > 0 else 0.0)
+                self._choke_cache = (rho_f, u_f, p_f, mdot, choked, E_f, h0_f)
+            else:
+                rho_f, u_f, p_f, mdot, choked, E_f, h0_f = self._choke_cache
             Fi[n] = [rho_f * u_f, rho_f * u_f**2 + p_f, u_f * (E_f + p_f)]
 
             Vstar = V - dt / dz * (Fi[1:n + 1] - Fi[0:n])
@@ -415,8 +607,7 @@ class WellboreModel:
             V = Vstar + dt * 0.5 * (S0 + S1)
             q_int += dt * float(np.sum(qw)) * np.pi * self.geometry.diameter * dz
 
-            # budgets
-            h0_f = eos.enthalpy(p_f, rho_f) + 0.5 * u_f**2
+            # budgets: h0_f = (E_f + p_f)/rho_f = h_f + u_f^2/2 exactly
             mdot_int += mdot * dt
             hflux_int += mdot * (h0_f + (G_EARTH * L if self.gravity else 0.0)) * dt
 
@@ -432,8 +623,14 @@ class WellboreModel:
                 uf_hist.append(u_f)
                 if sensors is not None:
                     sensors.sample(T, rho, u, p)
+                if monitor_sat:
+                    satm_hist.append(float(np.min(
+                        eos.saturation_margin(p, T))))
                 if progress is not None:
                     progress(t, t_end)
+            if two_phase_entry is not None:
+                # single-phase model no longer valid: stop and report
+                break
             while snap_done < snap_times.size and t >= snap_times[snap_done] - 1e-12:
                 rho = V[:, 0]
                 u = V[:, 1] / rho
@@ -465,10 +662,12 @@ class WellboreModel:
             mass=np.array(mass_hist), p_wellhead=np.array(pwh_hist),
             T_wellhead=np.array(Twh_hist), choked=np.array(chk_hist),
             u_wellhead_face=np.array(uf_hist),
+            sat_margin_min=np.array(satm_hist) if monitor_sat else None,
+            two_phase_entry=two_phase_entry,
             sensor_t=sensor_t, sensor_data=sensor_data,
             sensor_fluid_extra=sensor_extra, sensor_meta=sensor_meta,
             mass_balance_error=mass_err, energy_balance_error=energy_err,
-            n_steps=step, wall_time=wall,
+            heat_input_J=q_int, n_steps=step, wall_time=wall,
         )
 
 
@@ -488,25 +687,36 @@ def vessel_blowdown_ode(eos: IdealGasEOS, volume: float, choke: ChokeValve,
     """
     from scipy.integrate import solve_ivp
 
-    g = eos.gamma
+    ideal = isinstance(eos, IdealGasEOS)
     rho0, _ = eos.rho_e_from_pT(p0, T0)
+    if ideal:
+        g = eos.gamma
+
+        def p_of_rho(rho):
+            return p0 * (rho / rho0) ** g
+    else:
+        def p_of_rho(rho):
+            return eos.pressure_on_isentrope(rho, p0, rho0)
 
     def rhs(t, y):
         (rho,) = y
         rho = max(rho, 1e-8)
-        p = p0 * (rho / rho0) ** g
-        T = eos.temperature(p, rho)
+        p = p_of_rho(rho)
+        T = float(np.atleast_1d(eos.temperature(p, rho))[0])
         G, _ = eos.orifice_mass_flux(p, T, choke.p_back)  # u=0 stagnation
         if p <= choke.p_back:
             G = 0.0
         return [-choke.effective_area * G / volume]
 
     sol = solve_ivp(rhs, (0.0, t_end), [rho0], dense_output=True,
-                    rtol=1e-10, atol=1e-12, max_step=t_end / 200)
+                    rtol=1e-10 if ideal else 1e-7,
+                    atol=1e-12 if ideal else 1e-9,
+                    max_step=t_end / 200)
     t = np.linspace(0.0, t_end, n_out)
     rho = sol.sol(t)[0]
-    p = p0 * (rho / rho0) ** g
-    T = p / (eos.R * rho)
+    p = np.array([p_of_rho(rr) for rr in rho])
+    T = np.array([float(np.atleast_1d(eos.temperature(pp, rr))[0])
+                  for pp, rr in zip(p, rho)])
     mdot = np.array([
         choke.effective_area * eos.orifice_mass_flux(pp, TT, choke.p_back)[0]
         if pp > choke.p_back else 0.0

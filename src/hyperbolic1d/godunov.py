@@ -320,3 +320,47 @@ def solve_godunov_shock_tube(
         snap_p=np.array(snaps["p"]) if snaps["p"] else None,
         snap_T=np.array(snaps["T"]) if snaps["T"] else None,
     )
+
+
+# ----------------------------------------------------------------------------
+# General-EOS HLLC flux
+# ----------------------------------------------------------------------------
+def _flux_hllc_general(rL, uL, pL, eL, aL, rR, uR, pR, eR, aR):
+    """HLLC flux for an arbitrary (convex) EOS.
+
+    Takes reconstructed primitive states plus specific internal energy e
+    and sound speed a per side; no ideal-gas relations are used. Wave
+    speeds are the Davis/Einfeldt direct bounds
+    SL = min(uL - aL, uR - aR), SR = max(uL + aL, uR + aR), which are
+    robust for general equations of state (the PVRS estimate of the
+    ideal-gas path relies on gamma). The star-state construction follows
+    Toro (2009) Sec. 10.4 and is EOS-independent given E on each side.
+    """
+    EL = rL * (eL + 0.5 * uL * uL)
+    ER = rR * (eR + 0.5 * uR * uR)
+    VL = np.stack([rL, rL * uL, EL], axis=1)
+    VR = np.stack([rR, rR * uR, ER], axis=1)
+    FL = np.stack([rL * uL, rL * uL * uL + pL, uL * (EL + pL)], axis=1)
+    FR = np.stack([rR * uR, rR * uR * uR + pR, uR * (ER + pR)], axis=1)
+
+    SL = np.minimum(uL - aL, uR - aR)
+    SR = np.maximum(uL + aL, uR + aR)
+    denom = rL * (SL - uL) - rR * (SR - uR)
+    denom = np.where(np.abs(denom) < 1e-30, 1e-30, denom)
+    S_star = (pR - pL + rL * uL * (SL - uL) - rR * uR * (SR - uR)) / denom
+
+    def star(rk, uk, pk, Vk, Sk):
+        fac = rk * (Sk - uk) / (Sk - S_star)
+        Vst = np.empty_like(Vk)
+        Vst[:, 0] = fac
+        Vst[:, 1] = fac * S_star
+        Vst[:, 2] = fac * (Vk[:, 2] / rk + (S_star - uk)
+                           * (S_star + pk / (rk * (Sk - uk))))
+        return Vst
+
+    FstL = FL + SL[:, None] * (star(rL, uL, pL, VL, SL) - VL)
+    FstR = FR + SR[:, None] * (star(rR, uR, pR, VR, SR) - VR)
+    F = np.where((SL >= 0.0)[:, None], FL,
+        np.where((S_star >= 0.0)[:, None], FstL,
+        np.where((SR >= 0.0)[:, None], FstR, FR)))
+    return F
