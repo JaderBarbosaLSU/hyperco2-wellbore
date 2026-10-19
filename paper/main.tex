@@ -995,70 +995,67 @@ couplings for verification.
 %=============================================================
 \label{sec:thermal}
 
-\subsection{Radial thermal network}
+\subsection{Continuum formulation}
+\label{sec:thermal-continuum}
 
-The conjugate model attaches to every axial cell $j$ a one-dimensional
-radial thermal network representing the concentric completion of the
-LSU \co\ research well over its upper \SI{2000}{ft} (\cref{tab:stack};
-cf.\ the cross-sectional view and casing table of
-\cref{fig:well-schematic}).
-Only the 7-5/8\,in inner casing contains the pressurized fluid; the
-annulus between the 7-5/8\,in and 13-3/8\,in casings is air-filled, and
-the outer annuli are cemented to surface. The 30\,in conductor (upper
-${\sim}\SI{150}{ft}$ only) is neglected. Axial conduction in the
-solids is neglected (axial temperature gradients are
-$\mathcal{O}(\SI{0.05}{K/m})$ against radial gradients of
-$\mathcal{O}(\SI{100}{K/m})$ across the annulus).
-
-\begin{table}[htb]
-\centering
-\caption{Radial stack (upper \SI{2000}{ft}; radii from the casing table
-and API wall thicknesses: 7-5/8\,in 35.8\,lb/ft, 13-3/8\,in 72\,lb/ft,
-20\,in 133\,lb/ft; 26\,in borehole). All properties are adjustable
-parameters; the formation is Gulf-Coast sediment
-($\rho = \SI{2300}{kg/m^3}$, $c_p = \SI{1000}{J/(kg.K)}$).}
-\label{tab:stack}
-\begin{tabular}{llll}
-\toprule
-Region & $r_{\mathrm{in}} \to r_{\mathrm{out}}$ [mm] & Model & $k$ [\si{W/(m.K)}]\\
-\midrule
-Fluid bore & $0 \to 85.2$ & 1-D flow; Dittus--Boelter $h$ & ---\\
-7-5/8\,in CRA casing & $85.2 \to 96.8$ & capacitive shell & 19\\
-Air annulus & $96.8 \to 156.8$ & nonlinear conductance & \cref{eq:keff}\\
-13-3/8\,in casing & $156.8 \to 169.9$ & capacitive shell & 45\\
-Cement & $169.9 \to 237.9$ & capacitive shells & 0.9\\
-20\,in casing & $237.9 \to 254.0$ & capacitive shell & 45\\
-Cement & $254.0 \to 330.2$ & capacitive shells & 0.9\\
-Formation & $330.2 \to 5000$ & 16 log-spaced shells & 2.1\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Each solid shell $i$ carries the capacitance per unit length
-$C_i' = \rho_i c_{p,i}\,\pi\,(r_{\mathrm{out},i}^2 -
-r_{\mathrm{in},i}^2)$, lumped at the logarithmic-mean radius, and
-adjacent shells are connected by cylindrical-shell conduction
-resistances $R' = \ln(r_b/r_a)/(2\pi k)$. The network solves
+The conjugate model attaches to every axial cell $j$ of the wellbore
+discretization a one-dimensional radial heat-conduction problem through
+the concentric completion of the LSU \co\ research well over its upper
+\SI{2000}{ft} (\cref{tab:stack}; cf.\ the cross-sectional view and
+casing table of \cref{fig:well-schematic}). Only the 7-5/8\,in inner
+casing contains the pressurized fluid; the annulus between the
+7-5/8\,in and 13-3/8\,in casings is air-filled, and the outer annuli
+are cemented to surface. In each solid region (casings, cement
+sheaths, formation) the temperature obeys the transient radial heat
+equation
 \begin{equation}
-C_i'\,\frac{dT_i}{dt} =
- G_{i-1/2}'\,(T_{i-1} - T_i) + G_{i+1/2}'\,(T_{i+1} - T_i),
-\label{eq:network}
+\rho c_p\,\frac{\partial T}{\partial t}
+ = \frac{1}{r}\,\frac{\partial}{\partial r}
+ \!\left(k\,r\,\frac{\partial T}{\partial r}\right),
+\label{eq:radialpde}
 \end{equation}
-with the fluid coupling at the innermost node through the series
-conductance of the convective film and the inner half-shell,
-$G_f' = \left[\,1/(2\pi r_1 h) + R'_{\mathrm{half}}\,\right]^{-1}$, and
-the outer boundary held at the undisturbed geothermal temperature
-$T_{\mathrm{geo}}(\zeta) = T_s + \Gamma\,\zeta$ --- the \emph{same}
-profile used to initialize the fluid column in the geothermal cases, so
-fluid, completion, and formation start in mutual equilibrium and the
-initial wall heat flux is identically zero. For blowdown time scales
+with constant, temperature-independent properties $(k, \rho, c_p)$ per
+region. The boundary and interface conditions, from the bore outward,
+are:
+\begin{enumerate}
+\item \emph{Fluid/inner casing} ($r = r_w = \SI{85.2}{mm}$): Newton
+cooling against the local fluid temperature $T_f(\zeta, t)$ of the 1-D
+flow model,
+$-k\,\partial T/\partial r\,\big|_{r_w^+} = h\,\bigl(T(r_w) -
+T_f\bigr)$, with the
+convective coefficient $h$ from \cref{eq:db}; the same flux, with
+opposite sign, enters the fluid energy equation
+\cref{eq:energy} as $q_w'' = h\,(T(r_w) - T_f)$ (positive into the
+fluid).
+\item \emph{Solid--solid interfaces} (casing/cement, cement/casing,
+cement/formation): continuity of temperature and of radial heat flux;
+perfect thermal contact (fully bonded cement, no contact resistance).
+\item \emph{Air annulus} ($r_2 = \SI{96.8}{mm} \to r_3 =
+\SI{156.8}{mm}$): the gas is treated as massless (its volumetric heat
+capacity is $\mathcal{O}(10^{-3})$ of the solids'), so the flux is
+continuous across the gap and is carried by natural convection in
+parallel with thermal radiation; the closure is the nonlinear
+conductance of \cref{eq:keff,eq:ggap}.
+\item \emph{Far field} ($r = r_\infty = \SI{5}{m}$): fixed undisturbed
+geothermal temperature, $T(r_\infty, t) = T_{\mathrm{geo}}(\zeta) =
+T_s + \Gamma\,\zeta$ --- the \emph{same} profile used to initialize
+the fluid column in the geothermal cases, so fluid, completion, and
+formation start in mutual equilibrium and the initial wall heat flux
+is identically zero.
+\end{enumerate}
+The initial condition is $T(r, \zeta, 0) = T_{\mathrm{geo}}(\zeta)$
+everywhere in the solid domain. Axial conduction in the solids is
+neglected (axial temperature gradients are
+$\mathcal{O}(\SI{0.05}{K/m})$ against radial gradients of
+$\mathcal{O}(\SI{100}{K/m})$ across the annulus), which decouples the
+$N$ axial networks from one another; they interact only through the
+fluid. The 30\,in conductor pipe (upper ${\sim}\SI{150}{ft}$ only) is
+neglected. The far-field radius is generous: for blowdown time scales
 the rock thermal penetration depth $\sqrt{\alpha t}$ is of order
 centimeters ($\alpha = k/\rho c_p \approx \SI{9e-7}{m^2/s}$,
-$\sqrt{\alpha t} \approx \SI{6}{cm}$ at one hour), so the \SI{5}{m}
-far-field radius is generous by two orders of magnitude and the
-far-field boundary condition (fixed $T_{\mathrm{geo}}$) cannot
-influence the solution on these time scales. The formation shells are
-logarithmically spaced to resolve the near-wellbore gradient.
+$\sqrt{\alpha t} \approx \SI{6}{cm}$ at one hour), two orders of
+magnitude smaller than $r_\infty$, so the Dirichlet far-field
+condition cannot influence the solution on these time scales.
 
 The wellbore/formation heat flux is computed as part of the coupled
 solution rather than prescribed because it is the \emph{answer}, not
@@ -1067,6 +1064,122 @@ the cooling rate of the fluid (which depends on the discharge) and the
 depletion rate of heat stored in the completion (which depends on the
 flux history). Any prescribed-flux or prescribed-temperature closure
 presupposes that history.
+
+\subsection{Radial discretization: thermal network}
+\label{sec:thermal-network}
+
+\Cref{eq:radialpde} is discretized in the thermal-network
+(lumped-capacitance / resistance) form, which is exactly the
+finite-volume integration of \cref{eq:radialpde} over annular control
+volumes with cylindrical-shell (logarithmic) conduction between
+adjacent lumps. The radial mesh, identical for every axial cell,
+consists of $M = 23$ capacitive nodes (\cref{tab:stack}): one shell
+per steel casing, two equal-thickness sub-shells per cement sheath,
+and $16$ formation shells whose edge radii are geometrically spaced
+from the borehole wall $r_7 = \SI{330.2}{mm}$ to
+$r_\infty = \SI{5}{m}$ (common ratio
+$(r_\infty/r_7)^{1/16} = 1.185$), so that the near-wellbore gradient
+is resolved at the centimeter scale while the far field is covered
+economically. The air annulus contributes \emph{no} node; it is a
+nonlinear connection between the nodes on either side.
+
+\begin{table}[htb]
+\centering
+\caption{Radial stack and material properties (upper \SI{2000}{ft};
+radii from the casing table and API wall thicknesses: 7-5/8\,in
+35.8\,lb/ft, 13-3/8\,in 72\,lb/ft, 20\,in 133\,lb/ft; 26\,in
+borehole). All properties are adjustable inputs; values are standard
+handbook data for 13\%-Cr steel, carbon steel, class-G cement, and
+water-saturated Gulf-Coast sediments. The air-annulus properties
+(evaluated at the gap, not temperature-dependent) are
+$k_{\mathrm{air}} = \SI{0.026}{W/(m.K)}$,
+$\nu = \SI{1.6e-5}{m^2/s}$, $\mathrm{Pr} = 0.71$,
+$\varepsilon_i = \varepsilon_o = 0.8$.}
+\label{tab:stack}
+\begin{tabular}{llcccc}
+\toprule
+Region & $r_{\mathrm{in}} \to r_{\mathrm{out}}$ [mm] & Nodes &
+$k$ [\si{W/(m.K)}] & $\rho$ [\si{kg/m^3}] & $c_p$ [\si{J/(kg.K)}]\\
+\midrule
+Fluid bore & $0 \to 85.2$ & --- & \multicolumn{3}{c}{1-D flow;
+Dittus--Boelter $h$, \cref{eq:db}}\\
+7-5/8\,in CRA casing & $85.2 \to 96.8$ & 1 & 19 & 7750 & 460\\
+Air annulus & $96.8 \to 156.8$ & 0 &
+\multicolumn{3}{c}{nonlinear conductance, \cref{eq:keff,eq:ggap}}\\
+13-3/8\,in casing & $156.8 \to 169.9$ & 1 & 45 & 7850 & 490\\
+Cement A & $169.9 \to 237.9$ & 2 & 0.9 & 2000 & 900\\
+20\,in casing & $237.9 \to 254.0$ & 1 & 45 & 7850 & 490\\
+Cement B & $254.0 \to 330.2$ & 2 & 0.9 & 2000 & 900\\
+Formation & $330.2 \to 5000$ & 16 (geometric) & 2.1 & 2300 & 1000\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Index the nodes $i = 1, \dots, M$ from the bore outward; node $i$
+occupies the shell $[r_{\mathrm{in},i},\, r_{\mathrm{out},i}]$ with
+conductivity $k_i$ and volumetric capacity $(\rho c_p)_i$, and its
+temperature $T_i$ is lumped at the logarithmic-mean radius
+$\bar r_i = \sqrt{r_{\mathrm{in},i}\, r_{\mathrm{out},i}}$. All
+capacitances and conductances are per unit well length. The node
+capacitance is
+\begin{equation}
+C_i' = (\rho c_p)_i\,\pi\,\bigl(r_{\mathrm{out},i}^2 -
+r_{\mathrm{in},i}^2\bigr)
+\qquad [\si{J/(m.K)}],
+\label{eq:caps}
+\end{equation}
+and each node carries an inner and an outer half-shell conduction
+resistance from its boundary to its lump point,
+\begin{equation}
+R_i^{-} = \frac{\ln(\bar r_i / r_{\mathrm{in},i})}{2\pi k_i},
+\qquad
+R_i^{+} = \frac{\ln(r_{\mathrm{out},i} / \bar r_i)}{2\pi k_i}
+\qquad [\si{m.K/W}].
+\label{eq:halfres}
+\end{equation}
+The conductance between adjacent nodes is the series combination of
+the facing half-shells,
+\begin{equation}
+G_{i+1/2}' = \bigl(R_i^{+} + R_{i+1}^{-}\bigr)^{-1},
+\label{eq:ginter}
+\end{equation}
+except across the air annulus (between nodes $1$ and $2$), where the
+gap conductance of \cref{eq:keff} enters in series with the two
+facing steel half-shells:
+\begin{equation}
+G_{3/2}' = \left[\frac{1}{G_{\mathrm{gap}}'(T_1, T_2)}
+ + R_1^{+} + R_2^{-}\right]^{-1},
+\qquad
+G_{\mathrm{gap}}' =
+ \frac{2\pi k_{\mathrm{eff}}}{\ln(r_3/r_2)}
+ + 2\pi r_2\,\sigma F\,(T_1^2 + T_2^2)(T_1 + T_2),
+\label{eq:ggap}
+\end{equation}
+with $k_{\mathrm{eff}}$ from \cref{eq:keff} evaluated at the current
+surface temperatures and the gray-surface view factor $F$ defined in
+\cref{sec:correlations}. The two terminal conductances close the
+network: on the fluid side, the convective film in series with the
+inner half-shell of the CRA casing,
+\begin{equation}
+G_f' = \left[\frac{1}{2\pi r_w h} + R_1^{-}\right]^{-1},
+\label{eq:gfluid}
+\end{equation}
+and on the formation side, the outer half-shell of the last formation
+node to the fixed far-field temperature,
+\begin{equation}
+G_\infty' = \bigl(R_M^{+}\bigr)^{-1}.
+\label{eq:gouter}
+\end{equation}
+The semi-discrete network equation for interior nodes is then
+\begin{equation}
+C_i'\,\frac{dT_i}{dt} =
+ G_{i-1/2}'\,(T_{i-1} - T_i) + G_{i+1/2}'\,(T_{i+1} - T_i),
+\label{eq:network}
+\end{equation}
+with the convention $G_{1/2}' \equiv G_f'$, $T_0 \equiv T_f$ (the
+fluid temperature of the corresponding axial cell) and
+$G_{M+1/2}' \equiv G_\infty'$, $T_{M+1} \equiv
+T_{\mathrm{geo}}(\zeta_j)$.
 
 \subsection{Empirical correlations: documentation}
 \label{sec:correlations}
@@ -1150,22 +1263,139 @@ Gulf-Coast sediments); no empirical correlation is involved, and the
 discretization is verified against an independent reference solution
 (\cref{sec:vv-thermal}).
 
-\subsection{Solution procedure and coupling}
+\subsection{Discretized equations and time integration}
+\label{sec:thermal-discrete}
 
-The networks are advanced once per flow time step with backward Euler;
-each axial cell requires one tridiagonal (Thomas) solve, vectorized
-across all cells. The fluid temperature enters the solid solve
-explicitly, while the heat flux returned to the wellbore energy
-equation,
+Each radial network is advanced with the backward-Euler method over
+the \emph{same} time step $\Delta t$ as the flow solver (no
+sub-cycling). Writing $T_i^{\,n}$ for the node temperatures of axial
+cell $j$ at flow time level $n$ (the axial index is suppressed; the
+networks are independent), the fully discrete system is, for
+$i = 1, \dots, M$,
 \begin{equation}
-q_w'' = \frac{G_f'\,\left(T_1^{\,n+1} - T_f\right)}{2\pi r_1},
+\left(\frac{C_i'}{\Delta t} + G_{i-1/2}' + G_{i+1/2}'\right)
+T_i^{\,n+1}
+ - G_{i-1/2}'\,T_{i-1}^{\,n+1}
+ - G_{i+1/2}'\,T_{i+1}^{\,n+1}
+ = \frac{C_i'}{\Delta t}\,T_i^{\,n}
+ + \delta_{i1}\,G_f'\,T_f^{\,n}
+ + \delta_{iM}\,G_\infty'\,T_{\mathrm{geo}},
+\label{eq:be-system}
 \end{equation}
-uses the \emph{implicit} wall temperature through the same
-conductance. The energy delivered by the fluid source term in
-\cref{eq:energy} is therefore exactly the energy absorbed by the
-network, and the global budget of \cref{eq:budget}, extended by the
-wall-heat integral $\int \sum_j q_w''\,\pi D\,\Delta z\,dt$, continues
-to close to machine precision in the conjugate case.
+where the two terminal temperatures are \emph{not} unknowns of the
+radial solve: the fluid temperature enters explicitly at the old time
+level ($T_0 \equiv T_f^{\,n}$, coefficient lagging), and the far-field
+temperature is the fixed Dirichlet value ($T_{M+1} \equiv
+T_{\mathrm{geo}}$). Two linearizations keep \cref{eq:be-system}
+linear and tridiagonal:
+\begin{enumerate}
+\item the nonlinear gap conductance $G_{3/2}'$ of \cref{eq:ggap} is
+evaluated once per step at the \emph{current} surface temperatures
+$(T_1^{\,n}, T_2^{\,n})$ and then held fixed during the implicit
+solve (lagged-coefficient linearization); no Newton iteration is
+performed. The relative change of $G_{3/2}'$ over one flow step
+($\Delta t \sim \si{ms}$) is $\mathcal{O}(10^{-6})$, so the
+linearization error is far below the correlation uncertainty of
+\cref{eq:keff};
+\item the film coefficient $h$ in $G_f'$ (\cref{eq:gfluid}) is
+likewise evaluated from the current fluid fields
+$(T_f^{\,n}, \rho^{\,n}, u^{\,n})$ once per step.
+\end{enumerate}
+The resulting $M = 23$-node tridiagonal system per axial cell is
+solved with the Thomas algorithm; the forward/backward sweeps are
+vectorized across all $N$ axial cells (the mesh and static
+conductances are shared, only the right-hand sides and the two lagged
+conductances differ), so the thermal solve costs
+$\mathcal{O}(N\,M)$ operations per time step and is negligible
+against the EOS evaluations of the flow step.
+
+Backward Euler is chosen for robustness, not necessity: it is
+unconditionally stable, so the thermal solve places no constraint on
+$\Delta t$ regardless of how the stack is refined. Accuracy is not at
+issue --- the acoustic CFL step of the flow solver
+($\Delta t \approx \SI{4}{ms}$ at $N = 300$) over-resolves the
+shortest network time constant ($C_i'/\sum G' \gtrsim \SI{10}{s}$,
+node 1 under peak-discharge film coefficients) by three orders of
+magnitude, so the scheme's first-order local error is immaterial and
+the computed network evolution is effectively exact in time.
+
+\subsection{Coupling to the flow solver}
+\label{sec:thermal-coupling}
+
+The conjugate coupling is a first-order Lie (Godunov) splitting
+executed once per flow time step, in the following order:
+\begin{enumerate}
+\item \emph{Saturation monitoring} (\co\ only): the dome margin is
+evaluated on the current primitives; the run halts on any
+in-wellbore dome entry (\cref{sec:monitor}).
+\item \emph{Thermal advance}: $h$, $G_f'$, and $G_{3/2}'$ are
+evaluated from the current fluid and solid states; the $N$
+tridiagonal systems \eqref{eq:be-system} are solved, updating all
+node temperatures to $t^{\,n+1}$. The wall heat flux returned to the
+flow solver,
+\begin{equation}
+q_w''{}^{\,n} = \frac{G_f'\,\bigl(T_1^{\,n+1} - T_f^{\,n}\bigr)}
+{2\pi r_w}
+\qquad [\si{W/m^2}],
+\label{eq:qw-return}
+\end{equation}
+uses the \emph{implicit} wall temperature through the same series
+conductance $G_f'$ that acted in the solid solve, so the energy that
+leaves the network through its inner boundary over the step is
+exactly $2\pi r_w\,q_w''\,\Delta t$ per unit length --- the
+discrete-flux consistency that makes the global heat bookkeeping
+exact (below).
+\item \emph{Hyperbolic update}: the MUSCL--Hancock/HLLC step of
+\cref{sec:numerics}, including the gravitational face-flux work and
+the choke boundary closure.
+\item \emph{Source corrector}: the Heun (two-stage) source update of
+\cref{sec:sources} applies the wall heating to the fluid energy
+equation as the volumetric source $S_E = 4\,q_w''/D$
+(\cref{eq:energy}), with $q_w''$ held \emph{fixed} at the value
+\eqref{eq:qw-return} in both stages --- the thermal network is not
+re-advanced inside the corrector.
+\item \emph{Accounting}: the cumulative wall heat input
+$Q(t) = \int_0^{t} \sum_{j=1}^{N} q_w''\,\pi D\,\Delta z\;dt$
+is accumulated with the same quadrature as the source application,
+and enters the extended energy budget of \cref{eq:budget}.
+\end{enumerate}
+The splitting is first-order accurate in the coupling: the solid
+solve sees $T_f$ lagged by one step, and the fluid sees a flux frozen
+over the step. The associated error is negligible here because the
+coupling is extraordinarily over-resolved in time: the per-step
+relative temperature change of the innermost node due to the fluid
+coupling is $G_f' \Delta t / C_1' \sim 10^{-5}$--$10^{-4}$ (with
+$C_1' \approx \SI{2.4e4}{J/(m.K)}$ and $G_f' \lesssim
+\SI{e3}{W/(m.K)}$ at peak discharge), and the fluid-side temperature
+change from the frozen flux is similarly small compared with the
+advective update. Iterating the coupling to convergence
+(strong/implicit coupling) was therefore not implemented; it would
+change the solution at the $10^{-4}$ level while roughly doubling
+the thermal cost.
+
+Because step 2 advances the network with the energy extracted through
+\cref{eq:qw-return} and step 4 deposits exactly that energy into the
+fluid, the discrete energy delivered by the fluid source term in
+\cref{eq:energy} equals the energy absorbed by the networks, and the
+global budget of \cref{eq:budget}, extended by the wall-heat integral
+$Q(t)$, continues to close to machine precision in the conjugate case
+($\mathcal{O}(10^{-15})$--$\mathcal{O}(10^{-12})$ relative,
+\cref{sec:vv-code}). The network state also furnishes two diagnostic
+outputs used in \cref{sec:results}: the stored-energy density
+$\sum_i C_i'\,(T_i - T_{\mathrm{geo}})$ per axial cell, and the node
+temperatures at the 13-3/8\,in casing, which are sampled by the
+external-fiber sensor model.
+
+\paragraph{Reproducibility note.} \Cref{tab:stack} together with
+\cref{eq:caps,eq:halfres,eq:ginter,eq:ggap,eq:gfluid,eq:gouter,%
+eq:be-system,eq:qw-return}, the correlation set of
+\cref{sec:correlations}, and the splitting order above constitute the
+complete thermal model as implemented
+(\texttt{src/hyperbolic1d/thermal.py}); no additional closures,
+limiters, or tuning parameters exist in the code. The single
+geometric consistency requirement is that the flow-model diameter
+equal the thermal-stack bore, $D = 2 r_w$ (the implementation warns
+if they differ, since the exchange areas assume they match).
 
 %=============================================================
 \section{Numerical method}
