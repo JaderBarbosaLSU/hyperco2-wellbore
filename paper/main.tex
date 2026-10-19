@@ -270,6 +270,7 @@ closure without modification of the flow solver, and it is the seam at
 which future two-phase closures will attach.
 
 \subsection{Ideal-gas closure (nitrogen)}
+\label{sec:ideal}
 
 For the nitrogen baseline the interface is implemented by a calorically
 perfect gas,
@@ -1501,6 +1502,7 @@ and $N = 600$ for the short wave-resolution runs; the grid study of
 \cref{sec:vv-solution} quantifies the residual discretization error.
 
 \subsection{Summary of modifications for the real fluid}
+\label{sec:realmods}
 
 Moving from ideal-gas nitrogen to real-fluid \co\ changed the solver
 in exactly five places, all behind the property interface:
@@ -1983,6 +1985,7 @@ single-phase throat). The geothermal case never flashes.}
 \end{figure}
 
 \subsection{Wave propagation: N$_2$ versus CO$_2$}
+\label{sec:results-waves}
 
 \Cref{fig:wave} compares the bottomhole arrival of the valve-opening
 expansion wave at the geothermal initialization (600 cells). The
@@ -2262,6 +2265,342 @@ raw outputs (JSON/CSV), figures, and animations are maintained at
 \url{https://github.com/JaderBarbosaLSU/hyperco2-wellbore}. Colab
 notebooks reproduce the shock-tube, blowdown, thermal, and \co\
 stages.
+
+%=============================================================
+\appendix
+\section{Thermodynamic closure of the conservative system by the
+Span--Wagner equation of state}
+%=============================================================
+\label{app:closure}
+
+This appendix explains, at a fundamental level, how the
+Helmholtz-energy equation of state of \citet{span1996} closes the
+conservative system \eqref{eq:mass}--\eqref{eq:energy} and how the
+closure is exercised inside the HLLC finite-volume update --- the
+division of labor between the conservation laws and the thermodynamic
+fundamental equation, the exact sequence of operations performed in
+every cell at every time step, and what changes relative to the
+ideal-gas nitrogen closure. It complements
+\cref{sec:interface,sec:co2,sec:numerics}, which document the
+implementation; here the emphasis is conceptual completeness. The
+notation follows the main text.
+
+\subsection{The apparent counting problem and the closure principle}
+\label{app:counting}
+
+The conservative state vector per cell is
+$\mathbf{V} = [\rho,\ \rho u,\ E]^{T}$ with
+$E = \rho(e + u^2/2)$: three numbers. Yet the flux
+$\mathbf{F} = [\rho u,\ \rho u^2 + p,\ u(E+p)]^{T}$ requires the
+pressure, the heat-transfer and saturation-monitoring closures require
+the temperature, and the Riemann solver requires the speed of sound
+--- apparently more unknowns than equations. The resolution is the
+Gibbs phase rule: a pure substance in a single phase at equilibrium
+has exactly \emph{two} independent intensive degrees of freedom. Every
+other intensive property --- $p$, $T$, $h$, $s$, $c_v$, $c_p$, $a$ ---
+is a \emph{function of state}, a point on a two-dimensional surface,
+not an independently evolving field. The conservation laws advance the
+three conserved densities (mass, momentum, energy per volume); from
+them the two intensive coordinates $(\rho, e)$ follow algebraically;
+and the equation of state maps $(\rho, e)$ to everything else. No
+conservation equation for $p$ or $T$ exists because pressure and
+temperature are not conserved quantities --- they are read off the
+state surface. With $p = p(\rho, e)$ supplied, system
+\eqref{eq:mass}--\eqref{eq:energy} is three equations in three
+unknowns and is mathematically closed; the \emph{quality} of the
+closure (ideal gas versus reference EOS) determines the physical
+fidelity, not the well-posedness.
+
+The division of labor is thus exact: the conservation laws carry all
+of the \emph{dynamics} --- how much mass, momentum, and energy each
+cell holds and how the fluxes redistribute them --- while the
+fundamental equation carries all of the \emph{thermostatics} --- what
+pressure, temperature, and acoustic stiffness a fluid element with
+that density and energy content must exhibit. The two never overlap:
+the EOS contains no time derivative, and the conservation laws contain
+no substance-specific information beyond $p(\rho,e)$ and its
+derivatives.
+
+\subsection{The fundamental equation in Helmholtz form}
+\label{app:helmholtz}
+
+The \citet{span1996} equation is an analytic expression for the
+dimensionless specific Helmholtz energy as a function of reduced
+density and reciprocal reduced temperature,
+\begin{equation}
+\frac{f(\rho, T)}{R T}
+ = \alpha(\delta, \tau)
+ = \alpha^{0}(\delta, \tau) + \alpha^{\mathrm{r}}(\delta, \tau),
+\qquad
+\delta = \frac{\rho}{\rho_c}, \quad \tau = \frac{T_c}{T},
+\label{eq:helm}
+\end{equation}
+with $\rho_c = \SI{467.6}{kg/m^3}$, $T_c = \SI{304.1282}{K}$, and
+$R = \SI{188.92}{J/(kg.K)}$ for \co. The independent thermodynamic
+variables are $(\rho, T)$ --- equivalently $(\delta, \tau)$; everything
+else inside \cref{eq:helm} is a \emph{fitted constant}, fixed once by
+regression to the experimental database and never varied at run time:
+$\alpha^{0}$ is the ideal-gas part (an exact integral of the
+ideal-gas heat capacity, $\ln\delta$ plus Planck--Einstein terms), and
+$\alpha^{\mathrm{r}}$ is the residual part, a sum of 42 polynomial,
+exponential, Gaussian-bell, and nonanalytic terms whose coefficients
+and exponents are tabulated in \citet{span1996}; CoolProp
+\citep{bell2014} implements that table verbatim.
+
+Density and temperature are the \emph{natural variables} of the
+Helmholtz energy: from
+$df = -s\,dT + (p/\rho^2)\,d\rho$, both first derivatives of $f$ are
+themselves properties ($-s$ and $p/\rho^2$), so a single analytic
+$\alpha(\delta,\tau)$ is a \emph{complete} fundamental equation ---
+every equilibrium property follows from it by differentiation alone,
+with no integration (hence no path dependence and no additional
+constants beyond the reference-state offsets inside $\alpha^0$). The
+choice $(\rho, T)$ rather than, say, $(p, T)$ is essential for a
+wide-range reference equation: $\rho(p,T)$ is multivalued below the
+critical point (liquid and vapor branches), whereas $(\rho, T)$
+coordinates cover liquid, vapor, and supercritical states
+single-valuedly. Writing
+$\alpha_\delta = \partial\alpha/\partial\delta$ etc., the properties
+used by this framework are
+\begin{align}
+p &= \rho R T \left[\, 1 + \delta\,\alpha^{\mathrm{r}}_{\delta}
+ \,\right],
+\label{eq:sw-p}\\
+e &= R T\,\tau \left(\alpha^{0}_{\tau} +
+ \alpha^{\mathrm{r}}_{\tau}\right),
+\qquad h = e + \frac{p}{\rho},
+\label{eq:sw-e}\\
+s &= R \left[\, \tau\left(\alpha^{0}_{\tau} +
+ \alpha^{\mathrm{r}}_{\tau}\right) - \alpha^{0} -
+ \alpha^{\mathrm{r}} \,\right],
+\label{eq:sw-s}\\
+c_v &= -R\,\tau^{2} \left(\alpha^{0}_{\tau\tau} +
+ \alpha^{\mathrm{r}}_{\tau\tau}\right),
+\qquad
+c_p = c_v + R\,\frac{\left(1 + \delta\,\alpha^{\mathrm{r}}_{\delta}
+ - \delta\tau\,\alpha^{\mathrm{r}}_{\delta\tau}\right)^{2}}
+ {1 + 2\delta\,\alpha^{\mathrm{r}}_{\delta} +
+ \delta^{2}\alpha^{\mathrm{r}}_{\delta\delta}},
+\label{eq:sw-cv}\\
+a^{2} &= \left(\pd{p}{\rho}\right)_{\!s}
+ = R T \left[\, 1 + 2\delta\,\alpha^{\mathrm{r}}_{\delta}
+ + \delta^{2}\alpha^{\mathrm{r}}_{\delta\delta}
+ - \frac{\left(1 + \delta\,\alpha^{\mathrm{r}}_{\delta}
+ - \delta\tau\,\alpha^{\mathrm{r}}_{\delta\tau}\right)^{2}}
+ {\tau^{2}\left(\alpha^{0}_{\tau\tau} +
+ \alpha^{\mathrm{r}}_{\tau\tau}\right)} \,\right].
+\label{eq:sw-a}
+\end{align}
+Two structural points deserve emphasis. First, the ideal-gas limit is
+recovered exactly as $\delta \to 0$ (all
+$\alpha^{\mathrm{r}}$-derivatives vanish): \cref{eq:sw-p} reduces to
+$p = \rho R T$, and the bracket in \cref{eq:sw-a} reduces to
+$\gamma(T)$. The residual derivatives \emph{are} the real-gas
+corrections. Second, because $p$, $e$, $s$, and $a$ all descend from
+the \emph{same} $\alpha$, they automatically satisfy the Maxwell
+relations and the thermodynamic identity
+$a^2 = (\partial p/\partial\rho)_T + (T/\rho^2 c_v)\,
+(\partial p/\partial T)_\rho^2$ --- the self-consistency noted in
+\cref{sec:co2}, which no collection of independent property
+correlations can guarantee.
+
+\subsection{State recovery: from conservative variables to the
+Span--Wagner inputs}
+\label{app:recovery}
+
+After every conservative update the solver holds
+$\mathbf{V} = (\rho,\ \rho u,\ E)$ in each cell, from which the
+kinematics and the thermodynamic coordinates separate algebraically:
+\begin{equation}
+\rho = V_1,
+\qquad
+u = \frac{V_2}{V_1},
+\qquad
+e = \frac{V_3}{V_1} - \frac{u^{2}}{2}.
+\label{eq:consrec}
+\end{equation}
+The flow solver therefore delivers the state in the pair
+$(\rho, e)$ --- density from mass conservation, internal energy as the
+total-energy remainder after the resolved kinetic energy. The
+Span--Wagner surface, however, is parameterized by $(\rho, T)$:
+internal energy is one of its \emph{outputs} (\cref{eq:sw-e}), not one
+of its inputs. The mismatch is one-dimensional: $\rho$ is common to
+both pairs, so closing the loop requires only the scalar inversion of
+\cref{eq:sw-e} in $T$ at fixed density,
+\begin{equation}
+\text{find } T \text{ such that }
+e_{\mathrm{SW}}(\rho, T) - e_{\mathrm{flow}} = 0 .
+\label{eq:inversion}
+\end{equation}
+This equation has exactly one root in the single-phase region because
+$\left(\partial e/\partial T\right)_\rho = c_v > 0$: internal energy
+is strictly monotone in temperature along an isochore. A
+Newton iteration,
+$T \leftarrow T - \left[e_{\mathrm{SW}}(\rho,T) -
+e_{\mathrm{flow}}\right] / c_v(\rho, T)$,
+is therefore globally convergent from any reasonable initial guess,
+and the monotone slope $c_v$ is itself available from the same
+Helmholtz form (\cref{eq:sw-cv}). The inversion is \emph{necessary}
+for any real-fluid EOS in natural $(\rho,T)$ form --- it is the price
+of abandoning the ideal-gas algebra --- but it is cheap, local
+(per cell, no coupling), and robust. Once $T$ is known the chain
+closes by direct evaluation:
+\begin{equation}
+(\rho,\ \rho u,\ E)
+\;\xrightarrow{\ \text{\cref{eq:consrec}}\ }\;
+(\rho,\ u,\ e)
+\;\xrightarrow{\ \text{\cref{eq:inversion}}\ }\;
+(\rho,\ T)
+\;\xrightarrow{\ \text{\cref{eq:sw-p},\,\cref{eq:sw-a}}\ }\;
+p,\ a,\ \dots
+\label{eq:chain}
+\end{equation}
+In the implementation (\cref{sec:tables}) the maps
+$e_{\mathrm{SW}}$, $p_{\mathrm{SW}}$, $a_{\mathrm{SW}}$ are served
+from a $512\times512$ bilinear table on $(\ln\rho, T)$ built once
+from CoolProp, the Newton slope is a finite difference of the
+tabulated $e$ (floored at $c_v \ge \SI{50}{J/(kg.K)}$ for safety),
+and the iteration is vectorized over all cells simultaneously; the
+tabulation error against direct Span--Wagner evaluation is quantified
+there ($\lesssim 5\times10^{-5}$ relative). Conceptually nothing
+changes: the table \emph{is} \cref{eq:sw-e,eq:sw-p,eq:sw-a} sampled
+densely, and the boundary-condition thermodynamics
+(\cref{sec:split}) bypasses the tables and queries the full EOS
+directly.
+
+\subsection{The speed of sound and the HLLC wave speeds}
+\label{app:sound}
+
+The HLLC flux (\cref{sec:numerics}) is built from estimates of the
+slowest and fastest signal velocities of the local Riemann problem,
+$S_L \simeq \min(u_L - a_L,\ u_R - a_R)$ and
+$S_R \simeq \max(u_L + a_L,\ u_R + a_R)$, and a contact speed $S_*$
+computed from the jump conditions; the stable time step follows from
+the same speeds through the CFL condition. The $a$ entering these
+estimates must be the \emph{full thermodynamic} sound speed
+\eqref{eq:sw-a} --- the isentropic stiffness
+$(\partial p/\partial\rho)_s$ of the real fluid --- not an ideal-gas
+surrogate $\sqrt{\gamma R T}$: near the saturation dome the residual
+derivatives depress $a$ dramatically (\SI{223}{m/s} versus
+\SI{353}{m/s} ideal at \SI{5}{MPa}, \SI{300}{K}, a 37\,\%
+reduction), and with it both the admissible time step and the physical
+wave-propagation speeds reported in \cref{sec:results-waves}. Using a
+surrogate would not merely lose accuracy; underestimated wave speeds
+can defeat the upwinding logic of any approximate Riemann solver.
+Beyond $a$, the real-fluid HLLC evaluation needs no further EOS
+machinery: the energy flux uses $E + p$ directly, and the
+intermediate-state construction is algebraic in
+$(\rho, u, p, E, S_L, S_*, S_R)$.
+
+\subsection{Comparison with the ideal-gas closure}
+\label{app:ideal}
+
+For the nitrogen baseline (\cref{sec:ideal}) the entire closure
+collapses to algebra. With $p = (\gamma - 1)\rho e$ the pressure is an
+\emph{explicit} function of the conserved variables --- no inversion,
+no iteration:
+\begin{equation}
+p = (\gamma - 1)\left(E - \frac{(\rho u)^2}{2\rho}\right),
+\qquad
+T = \frac{e}{c_v},
+\qquad
+a = \sqrt{\frac{\gamma p}{\rho}} .
+\end{equation}
+Temperature is a mere rescaling of internal energy and is needed only
+for heat transfer and output; the dynamics never touch it. Moving to
+Span--Wagner \co\ replaces each of these one-line formulas by the
+machinery above, and the computational consequences are confined to
+four places: (i)~the per-cell closure becomes the nonlinear inversion
+\eqref{eq:inversion} --- the motivation for the tabulated fast path of
+\cref{sec:tables}; (ii)~the MUSCL face reconstruction carries $e$ and
+$a$ as additional primitive profiles so that no EOS inversion is
+needed per face (\cref{sec:realmods}); (iii)~the boundary-condition
+thermodynamics (isentropes, Riemann invariant, stagnation states,
+choke flux) exchange closed forms for quadrature and scalar EOS calls
+(\cref{sec:split,sec:hem}); and (iv)~a validity layer appears ---
+saturation monitoring and the safeguards of \cref{sec:safeguards} ---
+because, unlike the ideal gas, the real surface has boundaries (the
+vapor dome, the sublimation region) that the simulation must detect
+rather than silently cross. The conservative core of the solver ---
+reconstruction, HLLC algebra, update --- is unchanged; that is the
+practical payoff of routing all substance specificity through the
+$(\rho, e) \to (p, T, a)$ interface of \cref{sec:interface}.
+
+\subsection{One time step in one cell}
+\label{app:step}
+
+The complete per-cell sequence for one time step of the \co\ model,
+from conservative state to the quantities the next HLLC flux
+evaluation requires, is:
+\begin{enumerate}
+\item \emph{Decode kinematics:} $\rho, u, e$ from $\mathbf{V}$ by
+\cref{eq:consrec}.
+\item \emph{Invert for temperature:} solve \cref{eq:inversion} for
+$T$ (vectorized Newton on tabulated $e(\ln\rho, T)$; converged to
+$|\Delta T| < 10^{-8}\,\si{K}$ in $\lesssim 6$ iterations).
+\item \emph{Evaluate the surface:} $p$ and $a$ at $(\ln\rho, T)$
+(bilinear); the cell now holds the full primitive set
+$(\rho, u, p, T, e, a)$.
+\item \emph{Validity gate:} saturation margin
+$m = T - T_{\mathrm{sat}}(p)$ (table lookup); if $m < 0$ anywhere,
+halt with the flagged event (\cref{sec:monitor}).
+\item \emph{Closures on the primitives:} wall heat flux $q_w''$ from
+the conjugate network (\cref{sec:thermal-coupling}), friction factor
+from Re (\cref{sec:friction}); choke boundary state from the wellhead
+cell (\cref{sec:split}).
+\item \emph{Reconstruct:} limited slopes of
+$(\rho, u, p, e, a)$; MUSCL--Hancock half-step with the acoustic
+coefficient $\rho a^2$ (which for the real fluid is the tabulated
+$a$, \cref{sec:realmods}).
+\item \emph{Flux:} HLLC with wave-speed estimates from the face
+$(u, a)$ pairs; conservative update; gravity face-work and Heun
+source corrector.
+\item \emph{Advance:} $\mathbf{V}^{n+1}$ is conservative by
+construction; return to step 1.
+\end{enumerate}
+Steps 1--3 are the entire thermodynamic closure; they are executed
+once per cell per step (and implicitly for the reconstructed face
+values through the carried $e$ and $a$ profiles). Everything
+downstream consumes the primitive set without further EOS contact.
+
+\subsection{Near the saturation boundary}
+\label{app:dome}
+
+The inversion \eqref{eq:inversion} is well-posed only while
+$(\rho, e)$ corresponds to a single-phase state. If a cell's
+$(\rho, e)$ drifts into the vapor dome, the equilibrium surface
+becomes a different object --- properties of a two-phase mixture, with
+$c_v$ finite but the \emph{equilibrium} sound speed discontinuous
+across the phase boundary (it drops by an order of magnitude at
+minute vapor fractions) and undefined in the mixed region in the
+sense required by a single-phase Riemann solver. This model therefore
+never continues through such states: the margin gate (step 4 above;
+\cref{sec:monitor}) halts the run at first dome entry, before the
+inversion is ever asked for a two-phase state. Three implementation
+details support this policy (documented fully in
+\cref{sec:tables,sec:safeguards}): table nodes falling inside the
+dome are filled by gas-side extrapolation purely so that
+dome-\emph{grazing} lookups during the final pre-halt step remain
+finite --- they carry no physical meaning and are never relied upon;
+the Newton iterate is clamped to the table's temperature range, so
+the iteration cannot escape the tabulated envelope even on pathological
+input; and near-critical states, where $c_v$ grows and isochores
+flatten, lie outside the operating envelope of every case run here
+($p \le \SI{5}{MPa} \ll p_c$ on the gas side), so no near-critical
+safeguard beyond the margin gate is required. The one sanctioned
+two-phase computation --- flashing \emph{inside} the choke --- runs on
+the $(p, s)$ and $(h, s)$ flash surfaces of the same EOS at the
+boundary only (\cref{sec:hem}), where equilibrium mixture properties
+$(\rho, h)$ are well-defined and the ill-defined two-phase $a$ is
+never requested; the variational critical-flow condition replaces it.
+
+In summary: the conservation laws determine how much mass, momentum,
+and energy each cell holds; the Span--Wagner fundamental equation
+determines the unique single-phase $(p, T, a)$ consistent with that
+content; the scalar inversion \eqref{eq:inversion} is the hinge
+between the two; and the validity machinery ensures the hinge is only
+ever operated on states where the single-phase surface --- and with it
+the hyperbolic structure the HLLC solver assumes --- actually exists.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
