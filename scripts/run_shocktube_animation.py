@@ -4,8 +4,17 @@ the FV MUSCL-Hancock/HLLC solution, frame-synchronized over 0-3 ms.
 The exact solution is self-similar (a function of xi = (x - x0)/t), so it
 is sampled analytically at every frame; the FV run stores snapshots at
 the same instants. Outputs results/shocktube_exact_vs_fv.mp4/.gif.
+
+Longer runs: --t-end-ms T extends the comparison window. The exact
+Riemann solution holds only while no wave has reached a wall, so the
+domain is scaled proportionally (L and x_diaphragm multiplied by
+T / 3 ms) at FIXED cell size dx = 5 mm; the waves then never reach the
+walls and the FV solution stays comparable to the exact one over the
+whole window, while the structures spread over proportionally more
+cells. Output filenames gain a _{T}ms suffix for non-default T.
 """
 
+import argparse
 import pathlib
 import sys
 
@@ -26,14 +35,29 @@ from hyperbolic1d.scmm import PerfectGas
 RES = pathlib.Path(__file__).resolve().parents[1] / "results"
 RES.mkdir(exist_ok=True)
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--t-end-ms", type=float, default=None,
+                    help="comparison window in ms (default: benchmark 3 ms)")
+args = parser.parse_args()
+
 gas = PerfectGas()                 # air, matching the benchmark
-case = GESSNER_SINGLE_PHASE
+case = dict(GESSNER_SINGLE_PHASE)
+suffix = ""
+if args.t_end_ms is not None:
+    scale = args.t_end_ms * 1e-3 / case["t_end"]
+    case["t_end"] = args.t_end_ms * 1e-3
+    case["L"] *= scale                    # keep walls out of reach
+    case["x_diaphragm"] *= scale
+    suffix = f"_{args.t_end_ms:g}ms"
 N_FRAMES = 180
 T_END = case["t_end"]
+DX = 4.0 / 800                            # benchmark cell size, 5 mm
+n_cells = int(round(case["L"] / DX))
 
-print("[1] FV run with snapshots", flush=True)
+print(f"[1] FV run with snapshots (L={case['L']:.2f} m, "
+      f"{n_cells} cells, t_end={T_END*1e3:g} ms)", flush=True)
 fv = solve_godunov_shock_tube(
-    gas=gas, n_cells=800, flux="hllc", reconstruction="muscl",
+    gas=gas, n_cells=n_cells, flux="hllc", reconstruction="muscl",
     limiter="vanleer", t_end=T_END, n_snapshots=N_FRAMES,
     L=case["L"], x_diaphragm=case["x_diaphragm"],
     p_left=case["p_left"], T_left=case["T_left"],
@@ -54,7 +78,7 @@ ref0 = exact_reference(x_exact, T_END, gas, case)   # final time -> axis limits
 for ax, (key, lab, sc) in zip(axes.flat, specs):
     (le,) = ax.plot([], [], "k-", lw=1.8, label="Exact Riemann solution")
     (lf,) = ax.plot([], [], color="tab:red", lw=1.0, alpha=0.9,
-                    label="FV MUSCL-Hancock + HLLC (800 cells)")
+                    label=f"FV MUSCL-Hancock + HLLC ({n_cells} cells)")
     ax.set_xlim(0, case["L"])
     full = np.concatenate([ref0[key], getattr(fv, f"snap_{key}")[0]]) * sc
     pad = 0.06 * (full.max() - full.min())
@@ -82,7 +106,9 @@ def update(i):
 
 
 anim = FuncAnimation(fig, update, frames=len(fv.snap_times), blit=False)
-anim.save(RES / "shocktube_exact_vs_fv.mp4", fps=30, dpi=110, writer="ffmpeg")
-anim.save(RES / "shocktube_exact_vs_fv.gif", fps=15, dpi=70, writer="pillow")
+anim.save(RES / f"shocktube_exact_vs_fv{suffix}.mp4", fps=30, dpi=110,
+          writer="ffmpeg")
+anim.save(RES / f"shocktube_exact_vs_fv{suffix}.gif", fps=15, dpi=70,
+          writer="pillow")
 plt.close(fig)
 print("done", flush=True)
