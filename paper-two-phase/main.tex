@@ -1,0 +1,88 @@
+% Critical Assessment and Selection of a Two-Phase CO2 Wellbore
+% Blowdown Model -- HyperCO2 project research review.
+%
+% Source of record: docs/two_phase_model_assessment.md in
+% github.com/JaderBarbosaLSU/hyperco2-wellbore (commit 752bd18).
+% body.tex is the pandoc conversion of that document; edit body.tex
+% for content, this file for layout. References are inline with DOIs
+% and links; items the review could not verify against a primary
+% source are marked [unverified] in the text.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[round]{natbib}
+% Unicode characters used literally by the pandoc-converted body.tex
+\DeclareUnicodeCharacter{2080}{\ensuremath{_0}}
+\DeclareUnicodeCharacter{2082}{\ensuremath{_2}}
+\DeclareUnicodeCharacter{2084}{\ensuremath{_4}}
+\DeclareUnicodeCharacter{2070}{\ensuremath{^0}}
+\DeclareUnicodeCharacter{2074}{\ensuremath{^4}}
+\DeclareUnicodeCharacter{2075}{\ensuremath{^5}}
+\DeclareUnicodeCharacter{207B}{\ensuremath{^{-}}}
+\DeclareUnicodeCharacter{0393}{\ensuremath{\Gamma}}
+\DeclareUnicodeCharacter{0394}{\ensuremath{\Delta}}
+\DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+\DeclareUnicodeCharacter{03B5}{\ensuremath{\varepsilon}}
+\DeclareUnicodeCharacter{03B8}{\ensuremath{\theta}}
+\DeclareUnicodeCharacter{03BC}{\ensuremath{\mu}}
+\DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
+\DeclareUnicodeCharacter{03C1}{\ensuremath{\rho}}
+\DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
+\DeclareUnicodeCharacter{2016}{\ensuremath{\|}}
+\DeclareUnicodeCharacter{2032}{\ensuremath{'}}
+\DeclareUnicodeCharacter{2033}{\ensuremath{''}}
+\DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+\DeclareUnicodeCharacter{2194}{\ensuremath{\leftrightarrow}}
+\DeclareUnicodeCharacter{2202}{\ensuremath{\partial}}
+\DeclareUnicodeCharacter{2208}{\ensuremath{\in}}
+\DeclareUnicodeCharacter{2212}{\ensuremath{-}}
+\DeclareUnicodeCharacter{221D}{\ensuremath{\propto}}
+\DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
+\DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+\DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+\DeclareUnicodeCharacter{226A}{\ensuremath{\ll}}
+\DeclareUnicodeCharacter{2272}{\ensuremath{\lesssim}}
+\DeclareUnicodeCharacter{2273}{\ensuremath{\gtrsim}}
+\usepackage{amsmath,amssymb,graphicx,booktabs,longtable,array,calc}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+% pandoc compatibility macros used by body.tex
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\pandocbounded}[1]{#1}
+\newcommand{\real}[1]{#1}
+\setcounter{secnumdepth}{0}   % headings carry their own numbers
+
+\title{Critical Assessment and Selection of a Two-Phase CO$_2$\\
+Wellbore Blowdown Model}
+\author{HyperCO2 project research review\\
+\small Craft \& Hawkins Department of Petroleum Engineering, LSU ---
+PERTT Lab}
+\date{October 20, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent Literature-supported assessment of two-phase modeling
+approaches (HEM, HRM, drift-flux, two-fluid) for extending the
+verified single-phase HyperCO2 wellbore blowdown solver to two-phase
+liquid--vapor CO$_2$ flow. The Homogeneous Equilibrium Model is found
+to be the defensible starting point on quantitative grounds, with
+three bounded caveats: choke-discharge underprediction belongs at the
+boundary, the equilibrium sound speed is discontinuous at the vapor
+dome, and no-slip fails in the low-rate tail. The assessment covers
+the governing formulation, the $(\rho,e)$ equilibrium flash with
+Span--Wagner, transport closures, HLLC implications, a staged model
+hierarchy, a verification/validation plan against named open
+datasets, implications for fiber-optic DTS interpretation, and a
+prioritized roadmap. Four publishable gaps are identified, all within
+reach of the PERTT facility.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\input{body}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
