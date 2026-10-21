@@ -23,3 +23,6 @@ paper/hyperco2-paper-figures.zip
 paper/main.pdf
 paper/main.toc
 results/paper_us/
+results/eccsel/*.npz
+results/eccsel/*.pkl
+results/eccsel/*.log
