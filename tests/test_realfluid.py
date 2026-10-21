@@ -176,3 +176,132 @@ def test_geothermal_initialization(co2, lsu_geom):
     r_u = m.solve(5e6, 300.0, 10.0, init="hydrostatic", n_snapshots=2)
     assert r.sat_margin_min.min() > r_u.sat_margin_min.min() + 5.0
     assert r.sat_margin_depth is not None and r.choke_flashing is not None
+
+
+# ----------------------------------------------------------------------
+# HEM two-phase extension
+# ----------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def co2_2p():
+    return SpanWagnerCO2(two_phase=True, n_rho=256, n_T=256)
+
+
+def test_two_phase_mixture_closure(co2_2p):
+    """(rho, e) -> (p, T, x) inside the dome vs direct lever-rule
+    states built from CoolProp saturation properties."""
+    import CoolProp.CoolProp as CP
+
+    rng = np.random.default_rng(7)
+    for _ in range(60):
+        T = rng.uniform(222.0, 300.0)
+        vl = 1 / CP.PropsSI("D", "T", T, "Q", 0, "CO2")
+        vv = 1 / CP.PropsSI("D", "T", T, "Q", 1, "CO2")
+        x = rng.uniform(0.01, 0.99)
+        rho = 1.0 / ((1 - x) * vl + x * vv)
+        e = ((1 - x) * CP.PropsSI("U", "T", T, "Q", 0, "CO2")
+             + x * CP.PropsSI("U", "T", T, "Q", 1, "CO2"))
+        p_, T_, a_ = co2_2p.primitives(np.array([rho]), np.array([e]))
+        psat = CP.PropsSI("P", "T", T, "Q", 0, "CO2")
+        assert p_[0] == pytest.approx(psat, rel=2e-3)
+        assert T_[0] == pytest.approx(T, abs=0.1)
+        assert co2_2p.quality(rho, T) == pytest.approx(x, abs=2e-3)
+        assert a_[0] > 0.0
+
+
+def test_two_phase_equilibrium_sound_speed(co2_2p):
+    """Tabulated equilibrium a vs an independent finite-difference
+    isentropic derivative through CoolProp mixture states."""
+    import CoolProp.CoolProp as CP
+
+    def a_fd(p, x, dp=2e3):
+        sl = CP.PropsSI("S", "P", p, "Q", 0, "CO2")
+        sv = CP.PropsSI("S", "P", p, "Q", 1, "CO2")
+        s0 = (1 - x) * sl + x * sv
+        vl = 1 / CP.PropsSI("D", "P", p, "Q", 0, "CO2")
+        vv = 1 / CP.PropsSI("D", "P", p, "Q", 1, "CO2")
+        v0 = (1 - x) * vl + x * vv
+
+        def v_at(pp):
+            sl = CP.PropsSI("S", "P", pp, "Q", 0, "CO2")
+            sv = CP.PropsSI("S", "P", pp, "Q", 1, "CO2")
+            vl = 1 / CP.PropsSI("D", "P", pp, "Q", 0, "CO2")
+            vv = 1 / CP.PropsSI("D", "P", pp, "Q", 1, "CO2")
+            xx = (s0 - sl) / (sv - sl)
+            return (1 - xx) * vl + xx * vv
+
+        dvdp = (v_at(p + dp) - v_at(p - dp)) / (2 * dp)
+        return np.sqrt(-v0 * v0 / dvdp), 1.0 / v0
+
+    for p, x in ((3e6, 0.9), (3e6, 0.3), (1e6, 0.5), (5e6, 0.8)):
+        a_ref, rho = a_fd(p, x)
+        e = ((1 - x) * CP.PropsSI("U", "P", p, "Q", 0, "CO2")
+             + x * CP.PropsSI("U", "P", p, "Q", 1, "CO2"))
+        _, _, a_tab = co2_2p.primitives(np.array([rho]), np.array([e]))
+        assert a_tab[0] == pytest.approx(a_ref, rel=2e-2)
+
+
+def test_single_phase_path_unchanged_by_two_phase_tables(co2, co2_2p):
+    """Gas-phase closure agrees between legacy and two-phase tables."""
+    import CoolProp.CoolProp as CP
+
+    for rho, T in ((100.0, 310.0), (20.0, 250.0), (5.0, 300.0)):
+        e = CP.PropsSI("U", "D", rho, "T", T, "CO2")
+        for eos in (co2, co2_2p):
+            p_, T_, a_ = eos.primitives(np.array([rho]), np.array([e]))
+            assert T_[0] == pytest.approx(T, abs=0.05)
+            assert p_[0] == pytest.approx(
+                CP.PropsSI("P", "D", rho, "T", T, "CO2"), rel=1e-3)
+
+
+def test_hem_mode_identical_while_single_phase(lsu_geom):
+    """allow_two_phase changes policy only: identical trajectories while
+    the column never enters the dome."""
+    from hyperbolic1d.thermal import Geothermal
+
+    geo = Geothermal(T_surface=305.4, gradient=0.0255)
+    eos = SpanWagnerCO2(two_phase=True, n_rho=256, n_T=256)
+    kw = dict(geometry=lsu_geom, choke=ChokeValve(), eos=eos,
+              gravity=True, friction=True, n_cells=40)
+    r0 = WellboreModel(allow_two_phase=False, **kw).solve(
+        5e6, 300.0, 30.0, init="hydrostatic", geothermal=geo,
+        n_snapshots=3, hist_stride=200)
+    r1 = WellboreModel(allow_two_phase=True, **kw).solve(
+        5e6, 300.0, 30.0, init="hydrostatic", geothermal=geo,
+        n_snapshots=3, hist_stride=200)
+    assert np.array_equal(r0.p, r1.p)
+    assert np.array_equal(r0.T, r1.T)
+    assert r1.x is not None and float(r1.x.min()) == 1.0
+    assert r0.two_phase_entry is None and r1.two_phase_entry is None
+
+
+def test_hem_requires_two_phase_tables(lsu_geom):
+    m = WellboreModel(geometry=lsu_geom, choke=ChokeValve(),
+                      eos=SpanWagnerCO2(), allow_two_phase=True,
+                      n_cells=20)
+    with pytest.raises(ValueError, match="two_phase=True"):
+        m.solve(5e6, 300.0, 1.0, n_snapshots=2)
+
+
+def test_hem_blowdown_through_dome_entry(lsu_geom):
+    """Adiabatic geothermal blowdown continues through dome entry with
+    machine-precision budgets, recorded entry event, and a quality field
+    that leaves 1 after the entry time."""
+    from hyperbolic1d.thermal import Geothermal
+
+    geo = Geothermal(T_surface=305.4, gradient=0.0255)
+    eos = SpanWagnerCO2(two_phase=True, n_rho=256, n_T=256)
+    m = WellboreModel(geometry=lsu_geom, choke=ChokeValve(), eos=eos,
+                      gravity=True, friction=True, n_cells=40,
+                      allow_two_phase=True)
+    r = m.solve(5e6, 300.0, 700.0, init="hydrostatic", geothermal=geo,
+                n_snapshots=15, hist_stride=100)
+    assert r.two_phase_entry is not None
+    assert r.table_exit is None
+    assert r.t_hist[-1] == pytest.approx(700.0, rel=1e-6)
+    assert abs(r.mass_balance_error) < 1e-10
+    assert abs(r.energy_balance_error) < 1e-10
+    xmin = r.x.min(axis=1)
+    k_entry = np.searchsorted(r.snap_times, r.two_phase_entry["t"])
+    assert np.all(xmin[:max(k_entry - 1, 0)] >= 1.0 - 1e-12)
+    assert xmin[-1] < 1.0
+    assert r.liquid_mass is not None and r.liquid_mass[-1] > 0.0

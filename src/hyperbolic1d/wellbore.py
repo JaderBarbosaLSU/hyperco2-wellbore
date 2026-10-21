@@ -299,6 +299,9 @@ class BlowdownResult:
     choke_flashing: np.ndarray | None = None    # HEM throat inside dome
     choke_quality: np.ndarray | None = None     # HEM throat vapor quality
     two_phase_entry: dict | None = None         # first dome entry, if any
+    x: np.ndarray | None = None                 # HEM quality snapshots
+    liquid_mass: np.ndarray | None = None       # HEM liquid inventory [kg]
+    table_exit: dict | None = None              # HEM table-bounds halt
     heat_input_J: float = 0.0                   # integral of wall heat
     sensor_t: np.ndarray | None = None
     sensor_data: dict | None = None             # name -> T(t) array
@@ -325,6 +328,15 @@ class WellboreModel:
     # path; real-fluid runs may use 5-10 (the boundary state varies by
     # O(1e-4) per step, so the induced error is far below grid error)
     choke_update_stride: int = 1
+    # Homogeneous Equilibrium two-phase mode: with True (requires an EOS
+    # built with two_phase=True tables), in-wellbore dome entry is
+    # RECORDED (two_phase_entry keeps the first event) but no longer
+    # halts the run; the conservative equations are unchanged and the
+    # property closure supplies equilibrium mixture (p, T, a) plus the
+    # quality field. The run still halts, with ``table_exit`` set, if
+    # any state approaches the tabulated envelope (T_min floor or the
+    # liquid-side density cap) where the closure would extrapolate.
+    allow_two_phase: bool = False
 
     # ------------------------------------------------------------------
     def initial_state(self, p0: float, T0: float,
@@ -416,6 +428,12 @@ class WellboreModel:
         ideal = isinstance(eos, IdealGasEOS)
         g = eos.gamma if ideal else None
         monitor_sat = hasattr(eos, "saturation_margin")
+        hem = bool(self.allow_two_phase)
+        if hem and not getattr(eos, "two_phase", False):
+            raise ValueError(
+                "allow_two_phase=True requires an EOS with equilibrium "
+                "two-phase tables, e.g. SpanWagnerCO2(two_phase=True)")
+        table_exit = None
         n = self.n_cells
         L = self.geometry.depth
         dz = L / n
@@ -433,6 +451,9 @@ class WellboreModel:
         zc, V = self.initial_state(p0, T0, init, geothermal=geothermal)
         snap_times = np.linspace(0.0, t_end, n_snapshots)
         snaps = {"p": [], "T": [], "rho": [], "u": []}
+        if hem:
+            snaps["x"] = []
+        liq_hist = []
         snap_done = 0
 
         t = 0.0
@@ -462,6 +483,8 @@ class WellboreModel:
             p, T, _ = eos.primitives(rho, e)
             for k, q in (("p", p), ("T", T), ("rho", rho), ("u", u)):
                 snaps[k].append(q.copy())
+            if hem:
+                snaps["x"].append(np.asarray(eos.quality(rho, T)).copy())
             snap_done = 1
 
         wall0 = _time.perf_counter()
@@ -478,18 +501,34 @@ class WellboreModel:
             dt = min(dt, t_end - t)
 
             # single-phase validity: checked EVERY step (vectorized table
-            # lookup) so the run stops before the boundary thermodynamics
-            # are asked for states inside the dome
+            # lookup). Single-phase mode stops before the boundary
+            # thermodynamics are asked for states inside the dome; HEM
+            # mode records the first entry and continues.
             if monitor_sat:
                 margin = eos.saturation_margin(p, T)
                 jm = int(np.argmin(margin))
-                if margin[jm] < 0.0:
+                if margin[jm] < 0.0 and two_phase_entry is None:
                     two_phase_entry = dict(
                         t=float(t), z=float(zc[jm]),
                         depth=float(L - zc[jm]),
                         p=float(p[jm]), T=float(T[jm]),
                         rho=float(rho[jm]),
                         T_sat=float(T[jm] - margin[jm]))
+                    if not hem:
+                        break
+
+            # HEM tabulated-envelope guard: halt (flagged, never
+            # extrapolated) before any state leaves the property tables
+            if hem:
+                jT = int(np.argmin(T))
+                jr = int(np.argmax(rho))
+                if (T[jT] < eos.T_min + 1.0
+                        or rho[jr] > 0.98 * eos.rho_max):
+                    table_exit = dict(
+                        t=float(t), T_min=float(T[jT]),
+                        depth_Tmin=float(L - zc[jT]),
+                        rho_max=float(rho[jr]),
+                        depth_rhomax=float(L - zc[jr]))
                     break
 
             # wall heat flux: one evaluation per step. Conjugate models
@@ -584,13 +623,17 @@ class WellboreModel:
                     a_i, e_i = a[-1], e[-1]
                     dem = getattr(self, "_demand_cache", None)
                     if dem is None or abs(p_i - dem[2]) > 2e-3 * dem[2]:
-                        p0, T0, _, _ = eos.stagnation_from_state(
+                        p0, T0, s0, h0 = eos.stagnation_from_state(
                             float(p_i), float(rho_i), float(u_i))
                         if p0 <= self.choke.p_back * (1 + 1e-12):
                             dem = (0.0, False, p_i)
                         else:
+                            # pass (s0, h0) through: for a two-phase
+                            # boundary cell (HEM mode) the stagnation
+                            # (p0, T0) pair is degenerate on the
+                            # saturation line
                             G, chk = eos.orifice_mass_flux(
-                                p0, T0, self.choke.p_back)
+                                p0, T0, self.choke.p_back, s0=s0, h0=h0)
                             dem = (self.choke.effective_area * G, chk, p_i)
                         self._demand_cache = dem
                         self._flash_state = (
@@ -659,9 +702,13 @@ class WellboreModel:
                     jm = int(np.argmin(sm))
                     satm_hist.append(float(sm[jm]))
                     satd_hist.append(float(L - zc[jm]))
+                if hem:
+                    xq = np.asarray(eos.quality(rho, T))
+                    liq_hist.append(float(np.sum((1.0 - xq) * rho)
+                                          * dz * A))
                 if progress is not None:
                     progress(t, t_end)
-            if two_phase_entry is not None:
+            if two_phase_entry is not None and not hem:
                 # single-phase model no longer valid: stop and report
                 break
             while snap_done < snap_times.size and t >= snap_times[snap_done] - 1e-12:
@@ -671,6 +718,9 @@ class WellboreModel:
                 p, T, _ = eos.primitives(rho, e)
                 for k, q in (("p", p), ("T", T), ("rho", rho), ("u", u)):
                     snaps[k].append(q.copy())
+                if hem:
+                    snaps["x"].append(
+                        np.asarray(eos.quality(rho, T)).copy())
                 snap_done += 1
 
         wall = _time.perf_counter() - wall0
@@ -700,6 +750,9 @@ class WellboreModel:
             choke_flashing=np.array(flash_hist),
             choke_quality=np.array(qual_hist),
             two_phase_entry=two_phase_entry,
+            x=np.array(snaps["x"]) if hem else None,
+            liquid_mass=np.array(liq_hist) if hem else None,
+            table_exit=table_exit,
             sensor_t=sensor_t, sensor_data=sensor_data,
             sensor_fluid_extra=sensor_extra, sensor_meta=sensor_meta,
             mass_balance_error=mass_err, energy_balance_error=energy_err,

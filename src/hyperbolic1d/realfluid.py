@@ -82,7 +82,24 @@ class SpanWagnerCO2:
     # algebraic nozzle expansion may flash. False restores the previous
     # behavior (flux evaluated at the single-phase dome bound).
     hem_choke: bool = True
+    # two_phase=True builds HEM (homogeneous-equilibrium) tables: nodes
+    # inside the vapor dome carry the equilibrium MIXTURE state (lever-rule
+    # e and s, p = p_sat(T), and the full equilibrium two-phase sound speed
+    # from saturation-line derivatives), and the density range is extended
+    # to the saturated-liquid side. The (rho, e) -> T Newton of
+    # :meth:`primitives` is unchanged: (de/dT)_rho = c_v,eq > 0 inside the
+    # dome, so the inversion stays monotone. With the default False the
+    # tables are gas-phase only with nonphysical extrapolated dome fill
+    # (single-phase model; validity policed by the saturation monitor).
+    two_phase: bool = False
     _built: bool = field(default=False, repr=False)
+
+    def __post_init__(self):
+        # extend the default density range to cover the liquid branch when
+        # mixture states are representable (saturated liquid at 220 K is
+        # ~1166 kg/m^3); an explicit user-set rho_max is respected
+        if self.two_phase and self.rho_max == 300.0:
+            self.rho_max = 1200.0
 
     # ------------------------------------------------------------------
     # table construction
@@ -111,41 +128,109 @@ class SpanWagnerCO2:
         valid = np.zeros(shape, dtype=bool)
         iDT = CP.DmassT_INPUTS
         rhos = np.exp(lr)
+
+        # saturation-line arrays on the T grid (two-phase mode): hold the
+        # lever-rule endpoints and the saturation-line derivatives d(.)/dp
+        # needed for the equilibrium sound speed. The dome is treated only
+        # up to T_crit - 0.5 K; the sliver above that is handled as
+        # single-phase by CoolProp directly (the dome is vanishingly thin
+        # there and the lever-rule derivatives degenerate).
+        if self.two_phase:
+            Tdome = Tg[Tg < self.T_crit - 0.5]
+            nd = Tdome.size
+            sat = {k: np.empty(nd) for k in
+                   ("p", "vl", "vv", "el", "ev", "sl", "sv")}
+            for j, T in enumerate(Tdome):
+                T = float(T)
+                sat["p"][j] = CP.PropsSI("P", "T", T, "Q", 0, self.fluid)
+                for q, tag in ((0, "l"), (1, "v")):
+                    sat["v" + tag][j] = 1.0 / CP.PropsSI(
+                        "D", "T", T, "Q", q, self.fluid)
+                    sat["e" + tag][j] = CP.PropsSI(
+                        "U", "T", T, "Q", q, self.fluid)
+                    sat["s" + tag][j] = CP.PropsSI(
+                        "S", "T", T, "Q", q, self.fluid)
+            dps = {k: np.gradient(sat[k], sat["p"])
+                   for k in ("vl", "vv", "sl", "sv")}
+            self._sat_grid = (Tdome, sat)
+
         for j, T in enumerate(Tg):
             T = float(T)
-            # vapor-side validity: gas states at this T have rho below the
-            # saturated-vapor density (all rho valid above T_crit)
             if T < self.T_crit:
-                rho_sat = CP.PropsSI("D", "T", T, "Q", 1.0, self.fluid)
-                rho_lim = 0.999 * rho_sat
+                rho_v = CP.PropsSI("D", "T", T, "Q", 1.0, self.fluid)
+                rho_l = (CP.PropsSI("D", "T", T, "Q", 0.0, self.fluid)
+                         if self.two_phase else np.inf)
             else:
-                rho_lim = np.inf
+                rho_v, rho_l = np.inf, np.inf
             for i, rho in enumerate(rhos):
-                if rho > rho_lim:
+                in_dome = (self.two_phase and T < self.T_crit - 0.5
+                           and rho > 0.999 * rho_v and rho < 1.001 * rho_l)
+                if in_dome:
+                    # equilibrium mixture node: lever rule on v, e, s and
+                    # the full equilibrium sound speed
+                    #   a^2 = -v^2 / (dv/dp)_s,
+                    #   (dv/dp)_s = (1-x) vl' + x vv'
+                    #             - (vv - vl) [(1-x) sl' + x sv']/(sv - sl)
+                    # with ' = d/dp along the saturation line (includes
+                    # equilibrium mass transfer; discontinuous at x=0,1).
+                    jj = int(np.searchsorted(Tdome, T))
+                    jj = min(max(jj, 0), nd - 1)
+                    v = 1.0 / rho
+                    vl, vv = sat["vl"][jj], sat["vv"][jj]
+                    x = np.clip((v - vl) / (vv - vl), 0.0, 1.0)
+                    E[i, j] = (1 - x) * sat["el"][jj] + x * sat["ev"][jj]
+                    S[i, j] = (1 - x) * sat["sl"][jj] + x * sat["sv"][jj]
+                    P[i, j] = sat["p"][jj]
+                    dvdp_s = ((1 - x) * dps["vl"][jj] + x * dps["vv"][jj]
+                              - (vv - vl)
+                              * ((1 - x) * dps["sl"][jj] + x * dps["sv"][jj])
+                              / (sat["sv"][jj] - sat["sl"][jj]))
+                    A[i, j] = np.sqrt(-v * v / dvdp_s)
+                    valid[i, j] = True
                     continue
-                st.update(iDT, float(rho), T)
-                E[i, j] = st.umass()
-                P[i, j] = st.p()
-                A[i, j] = st.speed_sound()
-                S[i, j] = st.smass()
-                valid[i, j] = True
-        # fill dome/liquid nodes by linear extrapolation in ln rho from the
-        # last two valid vapor-side nodes of each T column. These values
-        # are nonphysical placeholders that keep bilinear lookups finite
-        # for transient states grazing the boundary; model validity is
-        # governed by the saturation-margin monitor, never by these nodes.
+                # single-phase node (gas; or liquid/supercritical in
+                # two-phase mode). Narrow near-boundary exclusion bands
+                # avoid CoolProp flash ambiguity at the dome edge.
+                if not self.two_phase and rho > 0.999 * rho_v:
+                    continue
+                if self.two_phase and 0.999 * rho_v < rho < 1.001 * rho_l:
+                    continue   # near-critical sliver band, filled below
+                try:
+                    st.update(iDT, float(rho), T)
+                    E[i, j] = st.umass()
+                    P[i, j] = st.p()
+                    A[i, j] = st.speed_sound()
+                    S[i, j] = st.smass()
+                    valid[i, j] = True
+                except ValueError:
+                    continue
+        # fill remaining invalid nodes by linear extrapolation in ln rho
+        # from the last two valid nodes of each T column. In single-phase
+        # mode these are the nonphysical dome placeholders that keep
+        # bilinear lookups finite for boundary-grazing states (validity is
+        # governed by the saturation monitor); in two-phase mode only the
+        # thin near-critical sliver and flash-failure nodes remain.
         for j in range(self.n_T):
             col = valid[:, j]
             if col.all() or not col.any():
                 continue
             iv = np.where(col)[0]
-            ilast = iv[-1]
-            if ilast < 1:
-                continue
-            for F in (E, P, A, S):
-                slope = (F[ilast, j] - F[ilast - 1, j]) / self._dlr
-                for i in range(ilast + 1, self.n_rho):
-                    F[i, j] = F[ilast, j] + slope * (lr[i] - lr[ilast])
+            if self.two_phase:
+                # interior gaps (near-critical sliver, rare flash
+                # failures): linear interpolation between valid neighbors;
+                # constant continuation at the tails
+                for F in (E, P, A, S):
+                    F[:, j] = np.interp(lr, lr[iv], F[iv, j])
+            else:
+                # single-phase mode: linear ln-rho extrapolation from the
+                # last two valid vapor-side nodes (unchanged legacy fill)
+                ilast = iv[-1]
+                if ilast < 1:
+                    continue
+                for F in (E, P, A, S):
+                    slope = (F[ilast, j] - F[ilast - 1, j]) / self._dlr
+                    for i in range(ilast + 1, self.n_rho):
+                        F[i, j] = F[ilast, j] + slope * (lr[i] - lr[ilast])
         self._E, self._P, self._A, self._S = E, P, A, S
         self._valid = valid
         self._built = True
@@ -183,16 +268,28 @@ class SpanWagnerCO2:
         rho = np.asarray(rho, dtype=float)
         e = np.asarray(e, dtype=float)
         lr = np.log(np.clip(rho, self.rho_min, self.rho_max))
+        # bisection-safeguarded Newton on the (strictly increasing)
+        # tabulated e(., T). Plain Newton limit-cycles across the vapor-
+        # dome boundary in two-phase mode, where (de/dT)_rho jumps by a
+        # factor of several at the kink; the bracket makes the iteration
+        # globally convergent for any monotone column.
         T = np.full_like(rho, 300.0)
-        for _ in range(30):
+        lo = np.full_like(rho, self.T_min)
+        hi = np.full_like(rho, self.T_max)
+        for _ in range(60):
             f = self._bilin(self._E, lr, T) - e
+            lo = np.where(f < 0.0, np.maximum(lo, T), lo)
+            hi = np.where(f > 0.0, np.minimum(hi, T), hi)
             dT = 2.0
             de = (self._bilin(self._E, lr, np.minimum(T + dT, self.T_max))
                   - self._bilin(self._E, lr, np.maximum(T - dT, self.T_min)))
             cv = de / (np.minimum(T + dT, self.T_max)
                        - np.maximum(T - dT, self.T_min))
-            step = f / np.maximum(cv, 50.0)
-            T = np.clip(T - step, self.T_min, self.T_max)
+            Tn = T - f / np.maximum(cv, 50.0)
+            bad = ~np.isfinite(Tn) | (Tn <= lo) | (Tn >= hi)
+            Tn = np.where(bad, 0.5 * (lo + hi), Tn)
+            step = Tn - T
+            T = Tn
             if np.max(np.abs(step)) < 1e-8:
                 break
         p = self._bilin(self._P, lr, T)
@@ -221,16 +318,25 @@ class SpanWagnerCO2:
         rho = np.asarray(rho, dtype=float)
         p = np.asarray(p, dtype=float)
         lr = np.log(np.clip(rho, self.rho_min, self.rho_max))
+        # bisection-safeguarded Newton (see primitives(): the dome
+        # boundary kinks the column and defeats plain Newton)
         T = np.full_like(rho, 300.0)
-        for _ in range(30):
+        lo = np.full_like(rho, self.T_min)
+        hi = np.full_like(rho, self.T_max)
+        for _ in range(60):
             f = self._bilin(self._P, lr, T) - p
+            lo = np.where(f < 0.0, np.maximum(lo, T), lo)
+            hi = np.where(f > 0.0, np.minimum(hi, T), hi)
             dT = 2.0
             dp = (self._bilin(self._P, lr, np.minimum(T + dT, self.T_max))
                   - self._bilin(self._P, lr, np.maximum(T - dT, self.T_min)))
             dpdT = dp / (np.minimum(T + dT, self.T_max)
                          - np.maximum(T - dT, self.T_min))
-            step = f / np.maximum(dpdT, 1.0)
-            T = np.clip(T - step, self.T_min, self.T_max)
+            Tn = T - f / np.maximum(dpdT, 1.0)
+            bad = ~np.isfinite(Tn) | (Tn <= lo) | (Tn >= hi)
+            Tn = np.where(bad, 0.5 * (lo + hi), Tn)
+            step = Tn - T
+            T = Tn
             if np.max(np.abs(step)) < 1e-8:
                 break
         return self._bilin(self._E, lr, T)
@@ -252,6 +358,35 @@ class SpanWagnerCO2:
     # ------------------------------------------------------------------
     # saturation monitoring
     # ------------------------------------------------------------------
+    def quality(self, rho, T):
+        """Equilibrium vapor mass quality x(rho, T) by the lever rule on
+        specific volume (two-phase tables required). Returns 1.0 for
+        superheated gas and for T above the dome treatment limit
+        (T_crit - 0.5 K), 0.0 for subcooled liquid. Vectorized."""
+        self._ensure()
+        if not self.two_phase:
+            raise ValueError("quality() requires two_phase=True tables")
+        rho = np.atleast_1d(np.asarray(rho, dtype=float))
+        T = np.atleast_1d(np.asarray(T, dtype=float))
+        Tdome, sat = self._sat_grid
+        Tcl = np.clip(T, Tdome[0], Tdome[-1])
+        vl = np.interp(Tcl, Tdome, sat["vl"])
+        vv = np.interp(Tcl, Tdome, sat["vv"])
+        x = np.clip((1.0 / rho - vl) / (vv - vl), 0.0, 1.0)
+        x = np.where(T >= self.T_crit - 0.5, 1.0, x)
+        return x if x.size > 1 else float(x[0])
+
+    def void_fraction(self, rho, T):
+        """Equilibrium vapor volume fraction alpha = x * v_v / v."""
+        self._ensure()
+        x = np.atleast_1d(self.quality(rho, T))
+        rho = np.atleast_1d(np.asarray(rho, dtype=float))
+        T = np.atleast_1d(np.asarray(T, dtype=float))
+        Tdome, sat = self._sat_grid
+        vv = np.interp(np.clip(T, Tdome[0], Tdome[-1]), Tdome, sat["vv"])
+        a = np.clip(x * vv * rho, 0.0, 1.0)
+        return a if a.size > 1 else float(a[0])
+
     def saturation_margin(self, p, T):
         """T - T_sat(p) [K]; positive = single-phase gas. Above p_crit
         the margin is taken against T_crit (dense/supercritical gate).
@@ -367,7 +502,7 @@ class SpanWagnerCO2:
         st.update(CP.HmassSmass_INPUTS, h0, s)
         return st.p(), st.T(), s, h0
 
-    def orifice_mass_flux(self, p0, T0, p_back):
+    def orifice_mass_flux(self, p0, T0, p_back, s0=None, h0=None):
         """Real-gas isentropic-nozzle mass flux per unit throat area.
 
         G(p_t) = rho(p_t, s0) * sqrt(2 (h0 - h(p_t, s0))), maximized over
@@ -387,17 +522,25 @@ class SpanWagnerCO2:
                                      table range), not by the sonic
                                      condition -- with HEM enabled this
                                      is rare (deep vacuum discharge)
-        The upstream (wellbore-side) state must be single phase; that is
-        enforced by the solver's per-step dome monitor, not here.
+        In single-phase operation the upstream state is policed by the
+        solver's per-step dome monitor. In HEM two-phase operation the
+        stagnation state may itself be a saturated mixture, for which the
+        (p0, T0) pair is degenerate (it sits on the saturation line):
+        the caller then passes the stagnation entropy and enthalpy
+        ``s0``/``h0`` directly (both are what the flux integrand actually
+        uses) and T0 is ignored.
         """
         from scipy.optimize import minimize_scalar
 
         CP = _CP()
         p0, T0 = float(p0), float(T0)
         st = self._abstract_state()
-        st.update(CP.PT_INPUTS, p0, T0)
-        s0 = st.smass()
-        h0 = st.hmass()
+        if s0 is None or h0 is None:
+            st.update(CP.PT_INPUTS, p0, T0)
+            s0 = st.smass()
+            h0 = st.hmass()
+        else:
+            s0, h0 = float(s0), float(h0)
 
         def G(pt):
             """Nozzle mass flux; 0.0 where the throat state is outside
