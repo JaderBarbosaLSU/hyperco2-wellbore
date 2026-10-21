@@ -61,7 +61,24 @@ g = solve_godunov_shock_tube(flux="hllc", reconstruction="muscl")
 print(mean_abs_errors(g))
 ```
 
-Or open `notebooks/01_single_phase_shock_tube.ipynb` in Google Colab.
+For the CO₂ (Span–Wagner) stages add the `co2` extra:
+
+```bash
+pip install "hyperbolic1d[plot,co2] @ git+https://github.com/JaderBarbosaLSU/hyperco2-wellbore"
+```
+
+### Notebooks (one-click Colab)
+
+| Notebook | Covers | Open |
+|---|---|---|
+| 01 shock tube | SCMM vs Godunov/HLLC vs exact Riemann | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/JaderBarbosaLSU/hyperco2-wellbore/blob/main/notebooks/01_single_phase_shock_tube.ipynb) |
+| 02 N₂ blowdown | wellbore model, choke BC, vessel-ODE check | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/JaderBarbosaLSU/hyperco2-wellbore/blob/main/notebooks/02_wellbore_blowdown.ipynb) |
+| 03 formation heat transfer | conjugate completion/formation model | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/JaderBarbosaLSU/hyperco2-wellbore/blob/main/notebooks/03_formation_heat_transfer.ipynb) |
+| 04 CO₂ blowdown | Span–Wagner real-fluid path, N₂ comparison | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/JaderBarbosaLSU/hyperco2-wellbore/blob/main/notebooks/04_co2_blowdown.ipynb) |
+| 05 CO₂ + geothermal + HEM choke | stage-2 headline case: HEM choke, geothermal IC, saturation margin, fiber sensors | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/JaderBarbosaLSU/hyperco2-wellbore/blob/main/notebooks/05_co2_geothermal_hem.ipynb) |
+
+Each notebook installs the package from GitHub in its first cell, so a
+fresh Colab runtime needs no setup.
 
 ## Benchmark: single-phase shock tube (Gessner Sec. 3.4)
 
