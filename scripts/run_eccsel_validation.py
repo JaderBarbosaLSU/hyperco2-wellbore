@@ -110,7 +110,7 @@ def load_test(key):
 
 # --------------------------------------------------------------- model
 def run_model(key, n_cells=600, t_end=10.0):
-    ckpt = RES / f"{key}_model_n{n_cells}.pkl"
+    ckpt = RES / f"{key}_model_n{n_cells}_t{t_end:g}.pkl"
     if ckpt.exists():
         with open(ckpt, "rb") as f:
             return pickle.load(f)
@@ -143,13 +143,15 @@ def run_model(key, n_cells=600, t_end=10.0):
 
 
 # -------------------------------------------------------------- figures
-def compare(key, r, stations=("PT204", "PT208", "PT212", "PT214"),
+def compare(key, r_wave, r_long,
+            stations=("PT204", "PT208", "PT212", "PT214"),
             t_wave=0.6, t_long=10.0):
     tPT, pt, tTT, tt = load_test(key)
-    ts = r.sensor_t
-    ex = r.sensor_fluid_extra
 
-    for tmax, tag in ((t_wave, "wave"), (t_long, "long")):
+    for r, tmax, tag in ((r_wave, t_wave, "wave"),
+                         (r_long, t_long, "long")):
+        ts = r.sensor_t
+        ex = r.sensor_fluid_extra
         fig, axes = plt.subplots(2, 2, figsize=(11, 6.6), sharex=True)
         for ax, nm in zip(axes.flat, stations):
             if nm not in pt:
@@ -178,6 +180,7 @@ def compare(key, r, stations=("PT204", "PT208", "PT212", "PT214"),
         plt.close(fig)
 
     # temperature at two stations (long window; adiabatic caveat)
+    r = r_long
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     for ax, nm in zip(axes, ("TT206", "TT212")):
         if nm in tt and tTT is not None:
@@ -205,7 +208,8 @@ if __name__ == "__main__":
     if "--n" in sys.argv:
         n = int(sys.argv[sys.argv.index("--n") + 1])
     for key in keys:
-        r = run_model(key, n_cells=n)
-        compare(key, r)
+        r_wave = run_model(key, n_cells=n, t_end=1.2)      # wave window
+        r_long = run_model(key, n_cells=n // 2, t_end=10.0)  # bulk window
+        compare(key, r_wave, r_long)
         print(f"[{key}] figures written", flush=True)
     print("done", flush=True)

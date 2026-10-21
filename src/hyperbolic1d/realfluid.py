@@ -557,6 +557,7 @@ class SpanWagnerCO2:
         self.last_choke_dome_limited = False
         self.last_choke_flashing = False
         self.last_choke_throat_quality = None
+        self.last_choke_throat_state = None
         if p_back >= p0:
             return 0.0, False
         hem = getattr(self, "hem_choke", True)
@@ -570,6 +571,13 @@ class SpanWagnerCO2:
         if lo >= p0 * 0.999:
             # stagnation state itself at/inside the dome boundary
             self.last_choke_dome_limited = True
+            try:
+                rho_t, h_t = self._rho_h_s(p0 * 0.999, s0)
+                self.last_choke_throat_state = dict(
+                    p=float(p0 * 0.999), rho=float(rho_t), h=float(h_t),
+                    u=float(np.sqrt(max(2.0 * (h0 - h_t), 0.0))))
+            except ValueError:
+                pass
             return float(G(p0 * 0.999)), True
         # validity-guarded bracketed maximization: coarse log scan first
         # (G = 0 marks states outside the single-phase/EOS region), then
@@ -594,6 +602,16 @@ class SpanWagnerCO2:
             self.last_choke_dome_limited = True
         choked = p_star > p_back * 1.001
         pt_eff = p_star if choked else float(p_back)
+        # record the throat/exit-plane state (used by the full-bore
+        # outflow boundary, where the face IS the throat): when choked
+        # this is the HEM sonic state, otherwise the p_back exit state
+        try:
+            rho_t, h_t = self._rho_h_s(pt_eff, s0)
+            self.last_choke_throat_state = dict(
+                p=float(pt_eff), rho=float(rho_t), h=float(h_t),
+                u=float(np.sqrt(max(2.0 * (h0 - h_t), 0.0))))
+        except ValueError:
+            self.last_choke_throat_state = None
         if hem and p_dome is not None and pt_eff < p_dome * 0.999:
             # HEM throat state inside the dome: record flashing + quality
             self.last_choke_flashing = True

@@ -640,9 +640,27 @@ class WellboreModel:
                             bool(getattr(eos, "last_choke_flashing", False)),
                             getattr(eos, "last_choke_throat_quality", None))
                     demand, choked, _ = dem
+                    full_bore = (self.choke.effective_area
+                                 >= 0.999 * A)
+                    thr = getattr(eos, "last_choke_throat_state", None)
                     if demand <= 0.0:
                         rho_f, u_f, p_f, mdot = rho_i, 0.0, p_i, 0.0
                         e_f = e_i
+                    elif full_bore and thr is not None:
+                        # Full-bore outflow (rupture-disc opening, no
+                        # restriction): the exit plane IS the throat.
+                        # The linearized demand/supply split below
+                        # assumes a small face perturbation
+                        # (dp_face << rho a^2) and diverges at an
+                        # order-one jump, so the quasi-steady HEM
+                        # throat state -- sonic when choked, the
+                        # p_back exit state otherwise -- is imposed
+                        # directly as the boundary face.
+                        rho_f = thr["rho"]
+                        u_f = thr["u"]
+                        p_f = thr["p"]
+                        e_f = thr["h"] - p_f / rho_f
+                        mdot = rho_f * u_f * A
                     else:
                         q = demand / A       # required rho_f * u_f
                         x = 0.0              # x = p_i - p_f
