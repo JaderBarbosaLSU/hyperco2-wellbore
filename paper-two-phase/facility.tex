@@ -1,0 +1,657 @@
+% Part II -- Closed-loop surface facility conceptual design.
+% All CO2 properties: Span-Wagner via CoolProp; well inventories from
+% the HyperCO2 hydrostatic+geothermal initializer (n = 200 cells).
+
+\part*{Part II --- Conceptual Design of the Closed-Loop Surface
+Facility}
+\addcontentsline{toc}{part}{Part II --- Closed-loop surface facility
+conceptual design}
+
+\section{II.1 Scope, method, and the two numbers that drive the design}
+
+Part II is a preliminary engineering feasibility study for the surface
+facility that will charge and discharge the 2,000-ft research well
+with CO$_2$ --- repeatedly, with reproducible initial conditions, and
+as a closed loop wherever that is defensible. It deliberately does not
+assume the initial concept (high-pressure tank + choke + compressor)
+is right; the configurations of \S II.4 are compared on computed
+thermodynamics, and the recommendation in \S II.12 differs from the
+initial concept in two essential ways. All properties are Span--Wagner
+\citep{span1996} via CoolProp \citep{bell2014}; well inventories come
+from the Part-I model's hydrostatic--geothermal initializer. Cost
+statements are order-of-magnitude judgments, flagged as such; nothing
+here substitutes for formal engineering review (\S II.10).
+
+Two computed numbers dominate every configuration decision:
+\begin{enumerate}
+\item \textbf{The working inventory is $\sim$1.6--2.1 tonnes.} The
+charged well (wellhead \SI{5.0}{MPa}, hydrostatic column, summer
+geothermal profile) holds \SI{1742}{kg}; a residual
+\SI{179}{kg} remains at a \SI{0.7}{MPa} wellhead, so one full
+blowdown transfers $\approx$\SI{1563}{kg}. A cold, uniform
+\SI{300}{K} column holds \SI{2064}{kg} (the Part-I stage-1 state), so
+storage must be sized for the cold-column worst case,
+$\approx$\SI{2.1}{t}, not the geothermal nominal.
+\item \textbf{Gas-phase collection at low back pressure is
+volumetrically impractical; liquid collection is trivial.} Holding the
+transferred \SI{1563}{kg} as gas at \SI{300}{K} requires
+\SI{122}{m^3} at \SI{0.7}{MPa}, \SI{84}{m^3} at \SI{1.0}{MPa}, and
+still \SI{40}{m^3} at \SI{2.0}{MPa}; as refrigerated liquid
+(\SI{2.0}{MPa}, \SI{-20}{\celsius}, $\rho = \SI{1032}{kg/m^3}$) it
+occupies \SI{1.5}{m^3}. Any closed loop therefore ends in a
+\emph{condensing} recovery train, and the only question is how fast
+it must run (\S II.3, \S II.8).
+\end{enumerate}
+
+\section{II.2 CO$_2$ state space of the facility}
+
+The facility operates between four thermodynamic anchors
+(\cref{tab:anchors}): refrigerated liquid storage on the saturation
+line near \SI{2}{MPa}/\SI{-20}{\celsius} (the industrial
+``mini-bulk'' standard, chosen in \S II.5); the charged well
+(\SI{5.0}{MPa} wellhead, \SI{5.75}{MPa} bottomhole, gas throughout by
+the Part-I margin analysis); the low-pressure recovery side
+(\SIrange{0.55}{1.0}{MPa} gas); and ambient-temperature liquid
+(saturation \SI{6.43}{MPa} at \SI{25}{\celsius}), which the design
+\emph{avoids} holding in any closed volume because of
+thermal-expansion overpressure (\S II.10). Two phase-diagram
+boundaries act as hard constraints: the critical point
+(\SI{7.377}{MPa}, \SI{304.13}{K}) --- the summer surface temperature
+of \SI{305.4}{K} sits \emph{above} $T_c$, so ``liquid at ambient''
+does not exist on hot days and near-critical storage states have
+violently temperature-sensitive densities (\S II.4, Configuration 3b)
+--- and the triple point (\SI{0.518}{MPa}, \SI{216.59}{K}): any
+depressurization path that crosses \SI{0.518}{MPa} while cold can
+form solid CO$_2$, which is why the closed-loop operating mode holds
+its collection pressure \emph{above} the triple pressure
+(\S II.3, Scenario B) and why vent and relief lines, which do cross
+it, are designed for dry ice (\S II.10; cf.\ the Part-I triple-point
+discussion and \citealp{martynov2018}).
+
+\begin{table}[htb]
+\centering
+\caption{Thermodynamic anchor states (Span--Wagner). The well column
+is the Part-I hydrostatic--geothermal profile; storage and recovery
+states are design choices justified in \S II.4--\S II.5.}
+\label{tab:anchors}
+\begin{tabular}{lcccl}
+\toprule
+State & $p$ [MPa] & $T$ [\si{\celsius}] & $\rho$ [\si{kg/m^3}] &
+Phase \\
+\midrule
+Liquid storage (mini-bulk) & 2.0 & $-20$ & 1032 & sat.\ liquid \\
+Storage vapor head & 2.0 & $-20$ & 52 & sat.\ vapor \\
+Charged well, wellhead & 5.0 & 32.3 & 121 & gas \\
+Charged well, bottomhole & 5.75 & 47.8 & 129 & gas \\
+Blowndown well, wellhead & 0.7 & var. & 13 & gas \\
+LP buffer (closed mode) & 0.55--1.0 & amb. & 10--19 & gas \\
+Ambient liquid (avoided) & 6.43 & 25 & 710 & sat.\ liquid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On a $p$--$h$ diagram the operating cycle is a loop: pumping raises
+the stored liquid from \SI{2.0}{} to \SI{6.5}{MPa} almost vertically
+(\SI{6.7}{kJ/kg}); the vaporizer carries it horizontally across the
+dome and into superheat (\SI{285}{kJ/kg}); the charging valve drops
+it isenthalpically into the well; blowdown expands the well inventory
+down the (approximately isentropic, wall-heated) paths computed in
+Part I; and the recovery compressor plus condenser close the loop
+back to the liquid anchor (\SI{101}{kJ/kg} of work, \SI{449}{kJ/kg}
+of heat rejection at \SI{-20}{\celsius}). Phase changes by process
+step: storage --- two-phase by design (saturated vessel); charging
+valve --- single-phase gas provided the vaporizer superheats
+sufficiently (\S II.3-A); wellbore --- single-phase by the Part-I
+margin analysis for the geothermal protocol, two-phase for cold
+protocols (the Part-I model extension exists to quantify exactly
+this); choke discharge --- flashing/two-phase possible, already
+treated by the Part-I HEM choke; LP collection --- gas (kept above
+the dew line at ambient temperature by pressure choice); compression
+--- gas, with \SI{143}{\celsius} discharge temperature at ratio 3.1
+(aftercooled); condensation --- two-phase by design.
+
+\section{II.3 Operating scenarios}
+
+\paragraph{Scenario A --- charging the well.} The well starts at
+\SIrange{0.7}{1.0}{MPa} (post-experiment) and must reach
+\SI{5.0}{MPa} wellhead with a prescribed temperature state. The
+recommended sequence: cryogenic pump draws saturated liquid from
+storage, raises it to \SIrange{6.0}{6.5}{MPa} (subcooled by the
+pressure rise itself, eliminating cavitation concern at the pump
+\emph{discharge}; inlet NPSH is provided by vessel liquid head and a
+flooded-suction installation); an ambient-air or trim-electric
+vaporizer takes it to \SIrange{305}{315}{K} superheated gas
+(\SI{285}{kJ/kg}; \SI{142}{kW} at \SI{0.5}{kg/s}); a flow-control
+valve admits it to the wellhead. Isenthalpic expansion from
+\SI{6.5}{MPa}/\SI{310}{K} to \SI{5.0}{MPa} lands at \SI{21.5}{\celsius}
+--- \SI{7.2}{K} above the \SI{5}{MPa} dew point of
+\SI{14.3}{\celsius} --- so the superheat setpoint directly controls
+the margin against condensation in the injection line; below
+$\approx$\SI{303}{K} vaporizer outlet the margin vanishes. Charging
+\SI{1563}{kg} at \SI{0.5}{kg/s} takes $\approx$\SI{52}{min};
+``staged pressurization'' is simply this sequence run under
+mass-flow control with soak periods, and needs no extra equipment.
+The alternatives are inferior on computed grounds: \emph{direct
+pressure-driven transfer from a gas vessel} requires either a
+\SI{28}{m^3} vessel at \SI{6.5}{MPa} (isothermal \SI{305}{K}, to
+deliver \SI{1563}{kg} without falling below \SI{5.2}{MPa}) or a
+near-critical dense vessel whose deliverable mass collapses from
+515 to \SI{149}{kg/m^3} of density swing between \SI{305}{} and
+\SI{313}{K} tank temperature --- an un-reproducible, weather-sensitive
+initial condition; \emph{direct compressor charging} from the
+\SI{2}{MPa} storage vapor head needs a \SIrange{30}{50}{kW}-class
+machine at ratio $>3$ with aftercooling, i.e.\ more capital and more
+failure modes than a \SI{7}{kW} pump, to do the same job more slowly;
+it also boils the storage liquid by vapor withdrawal, dragging the
+tank cold.
+
+\paragraph{Scenario B --- blowdown.} Two modes, selected by what the
+experiment needs. \emph{Vented mode} (reference experiments,
+model-validation campaigns at fixed atmospheric back pressure):
+discharge through the 12.7 mm choke to a vertical vent stack;
+reproduces the Part-I boundary condition exactly; loses the
+transferred inventory ($\approx$\SI{1.6}{t}/run --- a consumable
+cost, not a technical problem, but incompatible with
+``routine closed-loop'' aspirations). \emph{Closed mode}: discharge
+into the LP buffer held at \SIrange{0.55}{1.0}{MPa} by a
+back-pressure control valve, with the recovery train condensing into
+storage concurrently. Two physical facts make this mode respectable
+rather than a compromise: while the choke is \emph{choked},
+downstream pressure does not influence the wellbore transient at all,
+and with $p_b = \SI{0.7}{MPa}$ the flow stays choked until the
+wellhead falls to $\approx p_b/0.522 \approx \SI{1.34}{MPa}$
+($\gamma \approx 1.43$ at the relevant state) --- i.e.\ the majority
+of the transient is identical to the vented experiment, and only the
+subcritical tail differs (quantifiable in advance with the Part-I
+model, which takes $p_b$ as an input); and holding
+$p_b > \SI{0.518}{MPa}$ keeps the entire downstream system above the
+triple pressure, excluding dry-ice formation everywhere except the
+relief/vent paths. The buffer cannot, at reasonable size, absorb a
+full-rate 12.7 mm blowdown ($\dot m_0 \approx \SI{1.7}{kg/s}$,
+\S II.1 item 2); closed mode therefore pairs naturally with
+\emph{reduced chokes} (4--6 mm, $\dot m \lesssim \SI{0.3}{kg/s}$),
+for which the recovery train keeps up in near--real time ---
+precisely the orifice sizes of the \citet{hammer2022} experiments.
+Full-rate closed operation would need the buffer sized by
+$V = m_{\mathrm{transfer}}/\rho(p_{b,\max})$: \SI{84}{m^3} even
+allowing the back pressure to end at \SI{1.0}{MPa}.
+
+\paragraph{Scenario C --- recovery and reset.} The recovery
+compressor takes buffer gas (\SI{0.7}{MPa}, ambient) to
+\SI{2.2}{MPa} (single stage, ratio 3.1, \SI{101}{kJ/kg},
+\SI{143}{\celsius} discharge), an aftercooler/condenser rejects
+\SI{449}{kJ/kg} at the \SI{-20}{\celsius} storage level, and
+condensate returns to the storage vessel. Turnaround is set entirely
+by this train: \SI{1563}{kg} at \SI{0.1}{kg/s} is \SI{4.3}{h}
+(\SI{10}{kW} compressor, \SI{45}{kW} refrigeration); at
+\SI{0.2}{kg/s}, \SI{2.2}{h} (\SI{20}{kW}, \SI{90}{kW}). Thermal reset
+of the \emph{well} is separate and slower: after a blowdown the
+completion and near-wellbore formation are cold (Part-I stored-energy
+results), and the geothermal initial condition recovers on the
+formation's conductive time scale (hours; measurable with the DTS and
+itself a conjugate-model validation target). Reproducible initial
+conditions therefore favor a standardized soak protocol ---
+e.g.\ charge, then hold overnight --- rather than faster surface
+equipment.
+
+\paragraph{Scenario D --- repeated cycles.} Repetition changes the
+optimum: it is what disqualifies the single-gas-tank concept (state
+drift, \S II.4) and what justifies the liquid anchor --- a saturated
+vessel returns to the \emph{same} ($p$,$T$) after every cycle so long
+as its refrigeration holds the setpoint, making storage state the one
+part of the facility that is reproducible by construction. It also
+elevates inventory accounting (load cells on the storage vessel,
+\S II.9) from convenience to requirement: closed-loop leak-down is
+otherwise invisible.
+
+\section{II.4 Configurations compared}
+
+\Cref{fig:pfd-configs} sketches Configurations 1--4;
+\cref{fig:pfd-rec} details the recommended hybrid.
+\emph{Configuration 1 --- single gas tank.} One vessel both sources
+and receives. Fails quantitatively on both duties at once: as source
+it needs \SI{28}{m^3} at \SI{6.5}{MPa} (above), as receiver its
+pressure must sit \emph{below} the blowndown wellhead, after which
+the same vessel cannot recharge the well without a compressor rated
+for the full \SI{6.5}{MPa} discharge. State drift between cycles
+(each experiment changes tank $p$, $T$, inventory) makes reproducible
+initial conditions a control problem rather than a property of the
+design. Rejected.
+\emph{Configuration 2 --- HP gas tank + LP gas receiver +
+compressor.} The initial concept. Feasible, but the HP tank carries
+the Configuration-1 sizing burden and the LP receiver carries the
+\SIrange{40}{120}{m^3} gas-collection burden; the inter-tank
+compressor must then lift \SI{1.6}{t} across a ratio of
+$\sim$9 per cycle. Every vessel is large, every transfer is
+mechanical, and nothing in the loop is anchored to a reproducible
+state. Dominated by Configuration 5 on all criteria except
+conceptual familiarity.
+\emph{Configuration 3 --- direct compressor charging, no HP tank.}
+Smallest vessel count, but the charging compressor becomes the
+facility: ratio $>3$ from storage-vapor suction, \SIrange{30}{50}{kW},
+aftercooled, running for the entire charge, with the storage vessel
+refrigeration fighting the boil-off its suction induces. Charging
+rate, and hence the initial-condition protocol, is hostage to one
+machine. The near-critical ``dense storage'' variant (3b) is rejected
+for the \SI{305}{}--\SI{313}{K} density cliff computed in \S II.3-A.
+\emph{Configuration 4 --- liquid storage + pump.} The charging side
+of the recommended design: \SI{2.5}{m^3}-class refrigerated vessel,
+\SI{7}{kW} pump, vaporizer. By itself it is open-loop (no recovery);
+it answers the charging question but not the collection question.
+\emph{Configuration 5 --- hybrid (recommended).} Liquid storage +
+pump + vaporizer for charging; LP buffer + back-pressure valve for
+collection; compressor + condenser for recovery; vent stack for
+full-rate reference blowdowns. Each component exists because a
+computed number demands it, and none duplicates another's function.
+The ``more equipment'' caution in the brief is answered by what is
+\emph{absent}: no HP gas storage, no second large receiver, no
+charging compressor.
+
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+  scale=0.82, every node/.style={transform shape},
+  vessel/.style={draw, rounded corners=2pt, minimum width=1.5cm,
+                 minimum height=0.85cm, align=center, font=\scriptsize},
+  mach/.style={draw, circle, minimum size=0.72cm, align=center,
+               font=\scriptsize, inner sep=1pt},
+  well/.style={draw, minimum width=0.5cm, minimum height=1.5cm,
+               align=center, font=\scriptsize},
+  lbl/.style={font=\scriptsize\itshape},
+  flow/.style={-{Stealth[length=2mm]}, thick}]
+% Config 1
+\begin{scope}
+\node[vessel] (t1) at (0,0) {gas\\tank};
+\node[well] (w1) at (3.1,0) {well};
+\draw[flow] (t1) -- node[above,font=\tiny]{charge} (w1);
+\draw[flow, dashed] (w1.south) |- ++(-1.5,-0.55) -| (t1.south)
+  node[pos=0.25, below, font=\tiny]{blowdown + compressor};
+\node[lbl] at (1.55,-1.9) {Config.\ 1: single gas tank};
+\end{scope}
+% Config 2
+\begin{scope}[xshift=6.4cm]
+\node[vessel] (hp) at (0,0.65) {HP\\tank};
+\node[vessel] (lp) at (0,-0.95) {LP\\recv.};
+\node[well] (w2) at (3.1,0) {well};
+\node[mach] (c2) at (-1.5,-0.15) {C};
+\draw[flow] (hp.east) -- node[above,font=\tiny]{charge} (w2.120);
+\draw[flow] (w2.240) -- node[below,font=\tiny]{choke} (lp.east);
+\draw[flow] (lp.west) -| (c2.south);
+\draw[flow] (c2.north) |- (hp.west);
+\node[lbl] at (1.2,-2.3) {Config.\ 2: two gas tanks};
+\end{scope}
+% Config 3
+\begin{scope}[yshift=-4.6cm]
+\node[vessel] (t3) at (0,0) {storage};
+\node[mach] (c3) at (1.7,0) {C};
+\node[well] (w3) at (3.4,0) {well};
+\draw[flow] (t3) -- (c3);
+\draw[flow] (c3) -- node[above,font=\tiny]{charge} (w3);
+\draw[flow, dashed] (w3.south) |- ++(-2.0,-0.6) -| (t3.south)
+  node[pos=0.25, below, font=\tiny]{blowdown};
+\node[lbl] at (1.7,-1.95) {Config.\ 3: compressor charging};
+\end{scope}
+% Config 4
+\begin{scope}[xshift=6.4cm, yshift=-4.6cm]
+\node[vessel] (t4) at (0,0) {liquid\\storage};
+\node[mach] (p4) at (1.45,0) {P};
+\node[vessel] (v4) at (2.75,0) {vap.};
+\node[well] (w4) at (4.35,0) {well};
+\draw[flow] (t4) -- (p4); \draw[flow] (p4) -- (v4);
+\draw[flow] (v4) -- (w4);
+\draw[flow, dashed] (w4.south) -- ++(0,-0.55)
+  node[below, font=\tiny]{vent (open loop)};
+\node[lbl] at (2.1,-1.95) {Config.\ 4: liquid + pump (open)};
+\end{scope}
+\end{tikzpicture}
+\caption{Block process-flow sketches of Configurations 1--4
+(C = compressor, P = pump; dashed = discharge path). Configuration 5
+is \cref{fig:pfd-rec}.}
+\label{fig:pfd-configs}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+  vessel/.style={draw, rounded corners=2pt, minimum width=1.9cm,
+                 minimum height=1.0cm, align=center, font=\scriptsize},
+  mach/.style={draw, circle, minimum size=0.8cm, align=center,
+               font=\scriptsize, inner sep=1pt},
+  valve/.style={draw, regular polygon, regular polygon sides=3,
+                shape border rotate=270, minimum size=0.32cm,
+                inner sep=0pt, font=\tiny},
+  well/.style={draw, minimum width=0.6cm, minimum height=2.0cm,
+               align=center, font=\scriptsize},
+  lbl/.style={font=\scriptsize},
+  flow/.style={-{Stealth[length=2.2mm]}, thick}]
+\node[vessel] (stor) at (0,0)
+  {liquid storage\\ \SI{2.0}{MPa}, $-20\,^{\circ}$C\\ 2.5--\SI{3}{m^3}, load cells};
+\node[mach] (pump) at (2.6,0.75) {P};
+\node[lbl, above=0.05 of pump] {\SI{7}{kW}};
+\node[vessel] (vap) at (4.7,0.75) {vaporizer\\ 140 kW$_{\mathrm{th}}$};
+\node[valve] (fcv) at (6.7,0.75) {};
+\node[lbl, above=0.02 of fcv] {FCV};
+\node[well] (well) at (8.6,0) {well\\ \SI{5}{MPa}};
+\node[valve] (chk) at (8.6,-1.75) {};
+\node[lbl, right=0.05 of chk] {choke 4--12.7 mm};
+\node[valve] (bpv) at (6.6,-2.5) {};
+\node[lbl, above=0.02 of bpv] {BPV \SI{0.7}{MPa}};
+\node[vessel] (buf) at (4.4,-2.5)
+  {LP buffer\\ 10--\SI{15}{m^3}, $\le$\SI{1}{MPa}};
+\node[mach] (comp) at (2.2,-2.5) {C};
+\node[lbl, above=0.05 of comp] {10--\SI{20}{kW}};
+\node[vessel] (cond) at (0,-2.5)
+  {condenser\\ 45--90 kW$_{\mathrm{th}}$ at $-20\,^{\circ}$C};
+\node[lbl] (vent) at (10.6,-2.5) {vent stack};
+\draw[flow] (stor.east) ++(0,0.3) -| (pump.south);
+\draw[flow] (pump) -- (vap);
+\draw[flow] (vap) -- (fcv);
+\draw[flow] (fcv) -- (well.120);
+\draw[flow] (well.south) -- (chk.north);
+\draw[flow] (chk.south) |- (bpv.east);
+\draw[flow] (bpv.west) -- (buf.east);
+\draw[flow] (buf.west) -- (comp.east);
+\draw[flow] (comp.west) -- (cond.east);
+\draw[flow] (cond.west) -| ++(-0.5,1.2) |- (stor.west);
+\draw[flow, dashed] (chk.south) ++(0,-0.2) -| ++(1.4,0) -- (vent.west)
+  node[pos=0.5, above, font=\tiny]{vented mode};
+\end{tikzpicture}
+\caption{Recommended configuration (5): liquid-anchored closed loop
+with a vented reference mode. FCV = flow-control valve, BPV =
+back-pressure valve, P = cryogenic pump, C = recovery compressor.
+Relief devices, isolation valves, and instrumentation (\S II.9--II.10)
+omitted for clarity.}
+\label{fig:pfd-rec}
+\end{figure}
+
+\section{II.5 Storage: how much, in what phase}
+
+Sizing from the cold-column worst case with margin:
+$m_{\mathrm{stor}} = 1.5 \times \SI{2.1}{t} \approx \SI{3.2}{t}$,
+i.e.\ a \SI{3}{m^3}-class refrigerated vessel at
+\SI{2.0}{MPa}/\SI{-20}{\celsius} --- squarely the commercial CO$_2$
+``mini-bulk'' class (3--6 t, factory-insulated, packaged
+refrigeration), available for purchase or rental from industrial-gas
+suppliers, which is itself a strong argument for this anchor state:
+the long-lead, code-stamped component becomes a catalog item. Storage
+capacity should be based on \emph{total} inventory (not per-cycle
+transfer): the closed loop holds one inventory that migrates between
+well and storage, and the 1.5$\times$ factor covers heel, vapor head,
+and commissioning losses. The storage pressure band
+\SIrange{1.7}{2.3}{MPa} (\SI{-25}{} to \SI{-15}{\celsius}) trades
+refrigeration duty against pump suction margin; \SI{2.0}{MPa} is the
+conventional center. The minimum information to finalize sizing:
+confirmed bore volume per completion string actually used
+(\SI{13.9}{m^3} for the 7-5/8\,in string modeled in Part I), the
+coldest planned initial condition, and the heel the pump can reach.
+
+\section{II.6 Compressor versus pump: the division of labor}
+
+The intuition that ``a compressor displaces CO$_2$ from one vessel to
+another'' conflates three distinct operations with three different
+costs. (i) \emph{Pumping liquid}: work
+$w \approx v\,\Delta p/\eta$; with
+$v = \SI{0.97e-3}{m^3/kg}$, \SIrange{2.0}{6.5}{MPa} and
+$\eta = 0.65$, $w = \SI{6.7}{kJ/kg}$ --- \SI{7}{kW} at \SI{1}{kg/s},
+discharge temperature essentially unchanged (\SI{-16.5}{\celsius}).
+(ii) \emph{Compressing gas}: work scales with
+$\int v\,dp$ at gas-phase specific volume, two orders of magnitude
+larger; \SIrange{0.7}{2.2}{MPa} costs \SI{101}{kJ/kg}
+($\eta_s = 0.70$) and lands at \SI{143}{\celsius}, demanding
+aftercooling; ratios above $\sim$4 per stage force multistage
+machines with intercooling. (iii) \emph{Pressure-driven transfer}:
+free, but consumes the source vessel's state --- the \SI{28}{m^3}
+sizing result of \S II.3-A is the price of using a gas vessel's own
+pressure as the driver. The division of labor follows: the
+\emph{pump} does the high-pressure lift (charging), because the fluid
+is liquid there and the lift is cheap; the \emph{compressor} does the
+low-pressure gathering (recovery), because the fluid is unavoidably
+gas there and the ratio is modest; \emph{passive transfer} is used
+only where it is free of state consequences (blowdown itself, and
+gravity-fed pump suction). Both machines are justified --- but the
+compressor is a \SI{10}{}--\SI{20}{kW} recovery unit, not the
+\SI{50}{kW}-class charging machine of the initial concept. Per cycle
+(\SI{1563}{kg}): pump 2.9 kWh$_{e}$; vaporizer
+124 kWh$_{\mathrm{th}}$ (ambient-air units make most of this free);
+recovery compression 44 kWh$_{e}$; condensation
+195 kWh$_{\mathrm{th}}$ rejected at \SI{-20}{\celsius}
+($\approx$100--130 kWh$_{e}$ at packaged-unit COP 1.5--2).
+Liquid pumping beats gas compression for the charging duty by a
+factor of $\sim$15 in specific work --- but the honest accounting
+shows the cycle's real energy sits in the recovery refrigeration, not
+in either machine.
+
+\section{II.7 Equipment sizing methodology}
+
+Governing relations, stated so the numbers above are reproducible and
+re-sizable: vessel inventories from
+$m = \rho(p,T)\,V$ with Span--Wagner $\rho$; the well inventory from
+$m_{\mathrm{well}} = \int_0^L \rho\bigl(p(z),T(z)\bigr)A\,dz$ with
+the Part-I hydrostatic--geothermal profile (evaluated numerically by
+the model's initializer); pump power $\dot W = \dot m\,\Delta h_s/\eta$
+with $\Delta h_s$ along the liquid isentrope; compressor power the
+same along the gas isentrope, staged when $p_2/p_1 \gtrsim 4$;
+vaporizer and condenser duties as enthalpy differences between the
+anchor states; receiver volumes from $V = \Delta m/\rho(p_{\max},T)$;
+charging and recovery times from $\Delta m/\dot m$; blowdown duration
+from the Part-I model itself (e.g.\ wellhead-pressure half-life
+\SI{494}{s} for the 12.7 mm choke at $C_d = 0.84$). Sensitivities
+worth carrying into detailed design: all gas-side densities scale
+$\sim p/T$, so receiver sizing is robust; the near-critical states
+are the opposite (\S II.3-A) and should simply be avoided; vaporizer
+duty varies $\pm$15\,\% across the storage band; compressor work is
+insensitive to suction temperature but linear in $\ln(p_2/p_1)$.
+
+\section{II.8 Energy and turnaround comparison}
+
+Per full cycle, Configuration 5: $\approx$47 kWh$_{e}$ of machine
+work plus 100--130 kWh$_{e}$ of refrigeration --- order
+\$20--40 of electricity --- against $\approx$\SI{1.6}{t} of CO$_2$
+(order \$300--600 at merchant prices, \emph{[commodity prices
+indicative only]}) saved per run relative to venting. The loop pays
+for its operating cost in avoided gas after a handful of runs; the
+capital trade is the condenser/refrigeration train against the
+otherwise-necessary receiver volume, and \S II.1 item 2 settles that
+in the condenser's favor by an order of magnitude in vessel size.
+Turnaround: charge \SI{\sim 1}{h}, experiment
+\SIrange{0.3}{1.2}{h}, recovery \SIrange{2.2}{4.3}{h}
+(compressor-limited), thermal soak of the formation to the geothermal
+initial state: hours--overnight (conduction-limited, not
+equipment-limited). One experiment per day with an overnight soak is
+the natural cadence; a second daily run is possible at the cost of a
+non-equilibrium (but model-characterizable) initial thermal state.
+
+\section{II.9 Instrumentation and control}
+
+Actively \emph{controlled}: charging mass flow (FCV on Coriolis
+feedback), vaporizer outlet superheat ($\ge$\SI{10}{K} above the
+injection-line dew point), closed-mode back pressure (BPV setpoint
+\SIrange{0.55}{1.0}{MPa}), storage temperature (packaged
+refrigeration), compressor suction pressure (recycle/unload).
+\emph{Measured}: wellhead and choke-upstream/downstream $p$,$T$ (fast
+transducers at the wellhead --- the Part-I wave analysis implies
+$\gtrsim$\SI{100}{Hz} to resolve the expansion-wave arrival and
+reflections); Coriolis mass flow on the charge line; blowdown mass
+flow \emph{by inference} --- choke-model + upstream state, closed by
+storage-vessel load cells and buffer $p$,$T$ inventory accounting ---
+because a Coriolis meter in the discharge line would see flashing
+two-phase flow, where its reading is not trustworthy; the existing
+completion DTS for distributed temperature (the Part-I/Part-II
+saturation-thermometer opportunity); tank levels by differential
+pressure plus load cells; O$_2$/CO$_2$ area monitors. The control
+philosophy mirrors the model architecture deliberately: every
+controlled boundary of the facility (charge flow, back pressure,
+storage state) is an input the Part-I model already accepts, which is
+what makes the digital-twin coupling of \S II.11 a bookkeeping
+exercise rather than a re-formulation.
+
+\section{II.10 Safety (conceptual; formal review required)}
+
+The hazards are the standard dense-CO$_2$ set, concentrated as
+follows. \emph{Trapped-liquid overpressure}: any liquid-full segment
+between two valves (pump discharge line, condensate return) generates
+extreme pressure on warming; every such segment needs a thermal
+relief valve --- this is the single most common CO$_2$-facility
+design error. \emph{Two-phase/flashing relief}: relief devices on
+liquid or dense service must be sized by HEM/omega-method two-phase
+methods (API 520 Annex C; ISO 4126-10), not gas formulas --- the same
+physics as the Part-I choke analysis, and \citet{hammer2022} shows
+HEM sizing errs conservative (low) on flow, which for relief sizing
+is the \emph{non}-conservative direction; a margin policy is
+required. \emph{Dry ice}: vent and relief paths cross the triple
+pressure by design; they must be short, straight, downward-sloping,
+single-walled where blockage matters, and rated for
+\SI{-78}{\celsius} impingement (low-temperature-toughness material
+selection per B31.3); the closed-mode BPV floor of \SI{0.55}{MPa} is
+itself a dry-ice control. \emph{Asphyxiation}: a full inventory
+release is \SI{\sim 1.6}{t} of CO$_2$; outdoor, elevated vent
+discharge, area monitors with alarm-at-\SI{0.5}{\%}/evacuate
+levels, and attention to low-lying accumulation (CO$_2$ is
+1.5$\times$ air density). \emph{Machine protection}: compressor
+suction knockout (liquid carryover from the buffer on cold days),
+pump minimum-flow recycle, high-discharge-temperature trips.
+\emph{Codes}: ASME BPVC VIII vessels, B31.3 process piping, API
+520/521 relief, with CGA/EIGA CO$_2$-specific guidance
+\emph{[standard designations to be confirmed in formal review]}.
+Pressure ratings: the charging side sees \SI{6.5}{MPa} + relief
+margin; the well and wellhead govern themselves under existing
+facility certification.
+
+\section{II.11 Coupling to the wellbore model: the digital twin}
+
+The surface equipment is lumped-parameter by construction --- every
+vessel is a well-mixed mass/energy accumulator,
+\begin{equation}
+\frac{dM_i}{dt} = \sum_j \dot m_{ij},
+\qquad
+\frac{d(M_i u_i)}{dt} = \sum_j \dot m_{ij} h_{ij}
+ + \dot Q_i + \dot W_i,
+\label{eq:lumped}
+\end{equation}
+closed by Span--Wagner $(\rho, u) \to (p, T, x)$ --- the \emph{same}
+UV-flash primitive recovery as the Part-I two-phase wellbore closure,
+so one thermodynamic kernel serves the entire twin. Valves and chokes
+use the Part-I HEM orifice flux (already implemented); the
+charging FCV is the identical model run in reverse service; the
+compressor is a map $\dot m(p_s, p_d, N)$ with isentropic efficiency;
+the pump is $\dot m$-prescribed with \cref{eq:lumped} bookkeeping;
+heat exchangers are effectiveness--NTU duties. Connecting piping
+(tens of meters) has negligible volume next to the well
+(\SI{13.9}{m^3}) and buffer; it needs distributed treatment only if
+surface-line acoustics themselves become a measurement target. The
+coupling to the distributed wellbore model is through exactly one
+interface --- the wellhead boundary condition --- and the Part-I
+choke closure already takes the downstream pressure as a parameter:
+replacing the constant $p_b$ with the buffer state
+$p_b = p_{\mathrm{buf}}(t)$ from \cref{eq:lumped}, integrated
+explicitly at the wellbore time step (the buffer's fill time of
+minutes against acoustic steps of milliseconds makes the explicit
+coupling error negligible, by the same time-scale argument as the
+Part-I conjugate thermal coupling), turns the existing solver into
+the discharge half of the twin with no structural change. Mass and
+energy conservation across the facility then reduces to summing
+\cref{eq:lumped} over vessels plus the wellbore budgets the Part-I
+code already closes to machine precision --- giving the twin a
+built-in, auditable conservation check, and giving leak detection a
+quantitative baseline.
+
+\section{II.12 Recommendation}
+
+\textbf{A. One tank or two?} Two vessels, but not the two of the
+initial concept: one refrigerated \emph{liquid} storage
+(3 t class) as the reproducible anchor, plus one modest LP gas
+\emph{buffer} (10--\SI{15}{m^3}) as shock absorber --- not a second
+full-inventory gas tank.
+\textbf{B. Compressor for charging?} No. Charging is pump +
+vaporizer; passive transfer alone also fails (\S II.3-A). The
+compressor belongs on recovery, at one-fifth the power the charging
+duty would demand of it.
+\textbf{C. Liquid pump advantages?} Decisive: \SI{6.7}{} vs
+\SI{101}{kJ/kg}, \SI{7}{kW} vs tens of kW, no discharge-temperature
+management, catalog cryogenic hardware. Its obligations ---
+flooded suction, NPSH, thermal-relief of liquid-full segments --- are
+standard practice.
+\textbf{D. Storage phase?} Saturated liquid at
+\SI{2.0}{MPa}/\SI{-20}{\celsius}. Gas storage fails on volume,
+ambient-temperature liquid on the critical point and
+thermal-expansion hazard, near-critical dense fluid on
+reproducibility.
+\textbf{E. LP receiver rather than direct return?} Yes ---
+structurally necessary, since the blowndown stream can neither enter
+the \SI{2}{MPa} storage unaided nor be condensed at its instantaneous
+peak rate; the buffer decouples the fast experiment from the slow
+recovery train.
+\textbf{F. Reset procedure?} Compressor--condenser transfer at
+\SIrange{0.1}{0.2}{kg/s} (\SIrange{2.2}{4.3}{h}), concurrent with an
+overnight formation soak for geothermal initial conditions.
+\textbf{G/H. Best configuration, and easiest to model?} The same one
+--- Configuration 5 --- and not coincidentally: its control variables
+are exactly the model's boundary conditions (\S II.9, \S II.11).
+\Cref{tab:matrix} summarizes.
+
+\begin{table}[htb]
+\centering
+\small
+\caption{Configuration comparison. ++ favorable, $-$ unfavorable,
+$\circ$ neutral/conditional. Capital and operating costs are
+order-of-magnitude judgments at concept level.}
+\label{tab:matrix}
+\begin{tabular}{lccccc}
+\toprule
+Criterion & C1 single & C2 two-gas & C3 compr. & C4 liq.\ open &
+C5 hybrid \\
+\midrule
+Capital cost & $\circ$ & $-$ & $\circ$ & ++ & $\circ$ \\
+Operating cost/energy & $-$ & $-$ & $-$ & $\circ$ & + \\
+Equipment complexity & + & $-$ & $\circ$ & ++ & $\circ$ \\
+Operational flexibility & $-$ & $\circ$ & $-$ & $\circ$ & ++ \\
+Repeatability of ICs & $-$ & $-$ & $\circ$ & ++ & ++ \\
+CO$_2$ retention (closed) & $\circ$ & + & $\circ$ & $-$ & ++ \\
+Vessel volumes & $-$ & $-$ & + & ++ & + \\
+Safety profile & $\circ$ & $\circ$ & $\circ$ & + & + \\
+Ease of control & $-$ & $-$ & $-$ & + & + \\
+Digital-twin suitability & $\circ$ & $\circ$ & $-$ & + & ++ \\
+Future research headroom & $-$ & $\circ$ & $-$ & $\circ$ & ++ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Development strategy.} \emph{Phase 1 (essential, enables
+first experiments)}: liquid storage vessel, pump, vaporizer, charging
+FCV + Coriolis, vent stack, wellhead fast instrumentation, relief and
+gas-detection systems --- this is Configuration 4 and runs vented
+reference blowdowns that validate the Part-I/Part-II models.
+\emph{Phase 2 (closes the loop)}: LP buffer, BPV, recovery
+compressor, condenser, load-cell inventory accounting --- converts
+the same facility to Configuration 5 without rework, enabling
+repeated closed-cycle campaigns and the reduced-choke experiments.
+\emph{Optional/later}: second completion-string tie-ins, a
+surface test section for choke-model experiments
+(\citealp{hammer2022} geometry), slipstream impurity dosing.
+
+\paragraph{Unresolved before detailed engineering.} Confirmed
+completion string(s) and wellhead rating for repeated thermal
+cycling; coldest intended initial condition (sets storage margin and
+materials); site power available for the refrigeration train;
+acceptable per-run venting policy (regulatory and institutional);
+relief-study basis (full-bore charging-line failure vs choke stuck
+open); merchant CO$_2$ supply logistics for first fill and makeup;
+and the choke-hardware plan (fixed beans vs adjustable), which fixes
+whether $C_d$ calibration (Part I, \S 10) happens on the well or on a
+surface test section.
+
+\section{II.13 References and precedents for the facility concept}
+
+The closed-loop architecture has direct precedents in the
+depressurization rigs reviewed in Part I: the SINTEF ECCSEL
+depressurization facility \citep{munkejord2020, munkejord2021}
+(instrumentation density and data practices worth copying: 100 kHz
+pressure arrays, triplet thermocouples, open raw data), the
+\citet{hammer2022} orifice test section (the natural template for a
+surface choke-calibration leg), and the large-scale vented programs
+(COOLTRANS; \citealp{cosham2012}) whose venting practice ---
+vertical stacks, dry-ice-tolerant design --- informs the vented mode.
+No published facility performs repeated \emph{wellbore-scale}
+closed-loop CO$_2$ charge/discharge cycles; that is the same
+experimental gap identified in Part I (\S 14H), and this facility is,
+to the knowledge assembled here, the instrument that would fill it.

@@ -43,15 +43,20 @@
 \DeclareUnicodeCharacter{2272}{\ensuremath{\lesssim}}
 \DeclareUnicodeCharacter{2273}{\ensuremath{\gtrsim}}
 \usepackage{amsmath,amssymb,graphicx,booktabs,longtable,array,calc}
+\usepackage{siunitx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{cleveref}
 % pandoc compatibility macros used by body.tex
 \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 \providecommand{\pandocbounded}[1]{#1}
 \newcommand{\real}[1]{#1}
 \setcounter{secnumdepth}{0}   % headings carry their own numbers
 
-\title{Critical Assessment and Selection of a Two-Phase CO$_2$\\
-Wellbore Blowdown Model}
+\title{Two-Phase CO$_2$ Wellbore Blowdown Modeling and the\\
+Closed-Loop Experimental Facility: Critical Assessment\\
+and Conceptual Design}
 \author{HyperCO2 project research review\\
 \small Craft \& Hawkins Department of Petroleum Engineering, LSU ---
 PERTT Lab}
@@ -74,13 +79,32 @@ Span--Wagner, transport closures, HLLC implications, a staged model
 hierarchy, a verification/validation plan against named open
 datasets, implications for fiber-optic DTS interpretation, and a
 prioritized roadmap. Four publishable gaps are identified, all within
-reach of the PERTT facility.
+reach of the PERTT facility. Part~II is a preliminary engineering
+feasibility study of the surface facility for repeated closed-loop
+charging and discharging of the 2,000-ft well: operating scenarios,
+five candidate configurations with computed Span--Wagner
+thermodynamics, compressor-versus-pump analysis, storage and receiver
+sizing, energy and turnaround estimates, instrumentation, safety, and
+the coupling of lumped surface-equipment models to the transient
+wellbore solver as a digital twin. The recommended configuration
+anchors the loop on refrigerated liquid storage
+(\SI{2.0}{MPa}/\SI{-20}{\celsius}) with pump--vaporizer charging, a
+low-pressure buffer with condensing recovery, and a vented reference
+mode --- rejecting both the single-gas-tank and compressor-charged
+concepts on quantitative grounds.
 \end{abstract}
 
 \tableofcontents
 \clearpage
 
+\part*{Part I --- Critical Assessment and Selection of the Two-Phase
+Model}
+\addcontentsline{toc}{part}{Part I --- Two-phase model selection}
+
 \input{body}
+
+\clearpage
+\input{facility}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
