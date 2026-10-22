@@ -71,7 +71,17 @@ bottom within \SI{173}{s}, whereas with the geothermal summer
 initialization and the coupled thermal model the entire system ---
 wellbore and choke throat --- remains single phase for the full
 one-hour transient with a minimum saturation margin of
-\SI{25.6}{\degree F} (\SI{14.2}{K}).
+\SI{25.6}{\degree F} (\SI{14.2}{K}). Finally, the single-phase
+restriction itself is removed: a homogeneous-equilibrium (HEM)
+two-phase extension, confined entirely to the thermodynamic closure
+(lever-rule mixture tables with the full equilibrium two-phase sound
+speed), carries the solver through in-wellbore dome entry with
+machine-precision conservation, and is validated against the open
+SINTEF ECCSEL pipe-depressurization data at gas-phase and dense-phase
+initial conditions, with decompression-wave arrival times reproduced
+essentially exactly and the known equilibrium-model deviations
+(metastable delayed flashing near the exit) identified where the
+literature predicts them.
 \end{abstract}
 
 \tableofcontents
@@ -2124,6 +2134,222 @@ is thus thermal re-equilibration with the formation at ambient
 backpressure --- the physically expected end state.
 
 %=============================================================
+\section{Extension to two-phase flow: the homogeneous equilibrium
+model}
+%=============================================================
+\label{sec:hem2p}
+
+The single-phase model of the preceding sections halts, by design, at
+the first in-wellbore dome entry. This section documents the removal
+of that restriction by a Homogeneous Equilibrium Model (HEM): the
+conservative equations \eqref{eq:mass}--\eqref{eq:energy} are retained
+unchanged with $(\rho, u, E)$ interpreted as mixture quantities, and
+the entire extension lives in the thermodynamic closure --- exactly
+the division of labor anticipated by the property-interface design of
+\cref{sec:interface} and by the closure analysis of
+\cref{app:closure}. HEM was selected over relaxation (HRM),
+drift-flux, and two-fluid alternatives on quantitative grounds
+established in a companion assessment: fitted CO$_2$ phase-change
+relaxation times are \SIrange{0.04}{2.82}{ms} against minutes-scale
+blowdown \citep{log2024hrm}, and six-equation two-fluid modelling
+``did not clearly outperform'' HEM against pipe-depressurization data
+\citep{munkejord2015}.
+
+\subsection{Equilibrium mixture closure}
+
+For a pure substance in equilibrium the two-phase state is fixed by
+two variables, so the $(\rho, e)$ pair delivered by the conservative
+update remains a complete state specification inside the vapor dome.
+With $v = 1/\rho$ and the lever rule on the saturation line,
+\begin{equation}
+v = (1 - x)\,v_l(T) + x\,v_v(T),
+\qquad
+e = (1 - x)\,e_l(T) + x\,e_v(T),
+\qquad
+p = p_{\mathrm{sat}}(T),
+\label{eq:lever}
+\end{equation}
+the scalar inversion of \cref{sec:tables} carries over verbatim:
+$e(\rho, T)$ remains strictly increasing in $T$ at fixed density
+(equilibrium $c_v > 0$), so the same tabulated Newton recovers $T$,
+and the quality follows from the volume lever. The equilibrium
+two-phase sound speed --- the quantity that controls the HLLC wave
+speeds and the choked-flow physics --- is evaluated from
+saturation-line derivatives (prime $= d/dp$ along saturation):
+\begin{equation}
+a_{\mathrm{eq}}^2 = -\,\frac{v^2}{(\partial v/\partial p)_s},
+\qquad
+\left(\frac{\partial v}{\partial p}\right)_{\!s}
+ = (1-x)\,v_l' + x\,v_v'
+ - (v_v - v_l)\,\frac{(1-x)\,s_l' + x\,s_v'}{s_v - s_l},
+\label{eq:aeq}
+\end{equation}
+which includes equilibrium mass transfer and is therefore
+discontinuous at the dome boundary, as it must be
+\citep{lund2012}: for CO$_2$ at \SI{3}{MPa} the tabulated values fall
+from \SI{207}{m/s} (gas side) through \SI{194}{m/s} ($x = 0.98$) to
+\SI{44}{m/s} ($x = 0.05$), verified to $0.1\,\%$ against an
+independent finite-difference isentrope through CoolProp mixture
+states. Implementation: the $(\ln\rho, T)$ tables of \cref{sec:tables}
+are rebuilt (as an opt-in second table set; the single-phase tables
+and all single-phase results are untouched) with dome nodes carrying
+\cref{eq:lever,eq:aeq} and with the density range extended to the
+saturated-liquid side (\SIrange{0.5}{1200}{kg/m^3}). Verified
+closure accuracy against direct lever-rule states: maximum relative
+pressure error $7\times10^{-5}$, temperature error \SI{0.014}{K},
+quality error $1\times10^{-5}$ over 400 random dome states. One
+limitation is recorded: compressed-liquid pressure from the bilinear
+table is coarse ($-3.7\,\%$ at \SI{1000}{kg/m^3}), immaterial for
+gas-initiated blowdowns but relevant to any future liquid-fill
+protocol.
+
+\subsection{Two documented numerical failures and their fixes}
+
+\emph{(i) Newton limit cycle at the dome kink.} The plain Newton
+iteration of \cref{sec:tables} is globally convergent on the smooth
+single-phase $e(T)$ columns but \emph{limit-cycles} across the dome
+boundary, where $(\partial e/\partial T)_\rho$ jumps by a factor
+$\approx 3.5$: iterates alternate between the gas and mixture
+branches indefinitely (observed errors up to \SI{15}{K} before the
+fix). The inversion is now a bisection-safeguarded Newton carrying a
+bracket $[T_{lo}, T_{hi}]$ updated by the sign of the residual; any
+Newton step leaving the bracket is replaced by its midpoint, making
+the iteration globally convergent for any monotone column at
+unchanged cost in the smooth regions.
+\emph{(ii) Divergence of the linearized boundary closure at a
+full-bore opening.} The demand/supply choke split of \cref{sec:split}
+linearizes the supply characteristic about a small face perturbation,
+$\delta p_f \ll \rho a^2$ --- excellent for the 12.7 mm choke (area
+ratio ${\sim}200$, error $\mathcal{O}(10^{-5})$) and divergent for a
+rupture-disc (full-bore) opening, where the face jump is order one:
+in validation runs the boundary-cell density diverged within
+milliseconds. For the full-bore case the solver now imposes the
+quasi-steady HEM throat state directly as the exit face --- the sonic
+state of the $G$-maximization of \cref{sec:hem} when choked, the
+$p_b$ exit state otherwise --- the standard full-bore outflow
+treatment \citep{munkejord2020}. The wellbore choke cases never
+exercise this branch.
+
+\subsection{Solver policy, outputs, and verification}
+
+With \texttt{allow\_two\_phase}, the per-step saturation monitor of
+\cref{sec:monitor} \emph{records} the first dome entry (time, depth,
+state) instead of halting, and the run continues on the equilibrium
+closure; the quality field $x(\zeta, t)$ and the column liquid
+inventory $\int (1-x)\rho A\,dz$ are added to the outputs. The run
+still halts, flagged (\texttt{table\_exit}), if any state approaches
+the tabulated envelope --- the \SI{221}{K} floor or the liquid-side
+density cap --- where the closure would otherwise extrapolate; the
+floor abuts the sublimation region, whose treatment requires
+vapor--liquid--solid thermodynamics \citep{hammer2013} and is
+deliberately out of scope. Verification (all within the regression
+suite, 48/48 passing): the mixture-closure and sound-speed accuracies
+quoted above; exact policy equivalence (bit-identical trajectories
+with the mode on and off while the column remains single-phase);
+and mass/energy budgets at $10^{-16}$--$10^{-15}$ \emph{through}
+dome crossings. As a demonstration, the adiabatic geothermal case ---
+flagged and halted at \SI{503}{s} in \cref{sec:results-stage2}
+--- now continues through its dome entry and develops a wet zone
+near the wellhead (\cref{fig:hemdemo}): minimum quality $x = 0.947$
+and ${\sim}\SI{30}{kg}$ of condensate in the \SI{777}{kg} column at
+\SI{900}{s}, with budgets at $10^{-15}$.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{figures/hem_demo.png}
+\caption{HEM demonstration: the adiabatic CO$_2$ blowdown with
+geothermal initialization continued through dome entry
+($\times$: flagged first entry at $t = \SI{522}{s}$ near the
+wellhead; $n = 60$ demonstration resolution). (a)~quality field;
+(b)~temperature against the local saturation temperature ---
+two-phase cells ride the saturation line; (c)~column condensate
+inventory.}
+\label{fig:hemdemo}
+\end{figure}
+
+\subsection{Experimental validation: ECCSEL pipe depressurization}
+\label{sec:eccsel}
+
+The extension is validated against the SINTEF ECCSEL horizontal-pipe
+depressurization experiments \citep{munkejord2020}, whose raw data
+are open \citep{sintef2020data}: a \SI{61.668}{m}, \SI{40.8}{mm}-ID
+SS316 tube, one end closed, full-bore rupture-disc opening at the
+other, 16 flush-mounted pressure transducers at \SI{100}{kHz} and 23
+thermocouples. The mapping onto the wellbore solver is direct:
+gravity off, closed end at $z = 0$, measured roughness, adiabatic
+walls (appropriate for the decompression window, increasingly poor at
+long times), and the full-bore boundary of the preceding subsection;
+fluid sensors are placed at the transducer stations. Two tests are
+computed: Test~3 (gas phase, \SI{4.04}{MPa}, \SI{10.2}{\celsius} ---
+the published state closest to the research well's) and Test~8 (dense
+phase, \SI{12.22}{MPa}, \SI{24.6}{\celsius} --- the demanding case,
+in which the decompression wave crosses the dome). Laboratory data
+and comparisons are presented in SI units as published, departing
+from the US-customary convention of the well results.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{figures/eccsel_exp08_wave.png}
+\caption{ECCSEL Test 8 (dense phase, \SI{12.22}{MPa} /
+\SI{24.6}{\celsius}): measured and computed pressure at four stations
+during the decompression window. Wave arrival times at 20 and 40 m
+test both the liquid-phase sound speed and the equilibrium two-phase
+collapse; the near-exit station (PT204) shows the measured
+sub-equilibrium undershoot (delayed flashing) that an equilibrium
+model cannot reproduce.}
+\label{fig:eccsel8}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\textwidth]{figures/eccsel_exp03_wave.png}
+\caption{ECCSEL Test 3 (gas phase, \SI{4.04}{MPa} /
+\SI{10.2}{\celsius}): measured and computed pressure during the
+decompression window.}
+\label{fig:eccsel3}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/eccsel_exp08_T.png}
+\caption{ECCSEL Test 8: fluid temperature at two stations. The
+two-phase column rides the saturation line; the adiabatic model runs
+\SIrange{2}{7}{K} cold and slightly fast for lack of wall heat
+pickup, and halts flagged at the \SI{221}{K} envelope floor at
+\SI{3.9}{s}. The measurement bottoms at the triple-point temperature
+near \SI{5}{s} before dry-out rewarming.}
+\label{fig:eccsel8T}
+\end{figure}
+
+The quantitative outcome (\cref{fig:eccsel8,fig:eccsel3,%
+fig:eccsel8T}): decompression-wave arrival times at the 20 and
+\SI{40}{m} stations of Test~8 are reproduced essentially exactly ---
+the single most sensitive test of the sound-speed content of
+\cref{eq:aeq}, since an error in either the liquid-phase speed or the
+equilibrium collapse at the phase boundary would shift the step
+arrivals visibly at these distances. Two-phase plateau pressures at
+the far stations agree within \SIrange{0.1}{0.2}{MPa}. In Test~3 the
+computed $p(t)$ tracks the measurement within
+\SIrange{0.1}{0.2}{MPa} at all stations, running slightly low at
+late times, consistent with the missing wall heat input. The
+deviations are the \emph{expected} ones, and are stated rather than
+smoothed over: (i)~at PT204, \SI{0.48}{m} from the exit of Test~8,
+the measurement undershoots the equilibrium plateau and recovers ---
+metastable delayed flashing in the fastest-expanding region, the
+documented HEM deficiency whose repair is the relaxation (HRM) level
+of the model hierarchy \citep{log2024hrm}; (ii)~late-time
+temperatures run cold for lack of a wall heat-transfer closure;
+(iii)~both runs terminate flagged at the \SI{221}{K} table floor near
+the open end (\SI{0.8}{s} / \SI{3.9}{s}) as the exit region
+approaches the sublimation boundary --- the stated validity edge of a
+vapor--liquid HEM, irrelevant to the wellbore application (whose
+states never approach it) but limiting for full-bore atmospheric
+blowdown simulation. Within its stated envelope, the two-phase
+extension is thus verified to machine-precision conservation and
+validated against open experimental data at both gas-phase and
+dense-phase initial conditions.
+
+%=============================================================
 \section{Reproducibility}
 %=============================================================
 \label{sec:repro}
@@ -2248,15 +2474,22 @@ cold-column cases well-posed at all; (v)~the external 13-3/8\,in
 fiber is nearly isolated by the air annulus and thus functions as an
 annulus-integrity diagnostic rather than a transient sensor.
 
-The deferred items are explicit: two-phase conditions \emph{inside
-the wellbore} halt the simulation by design and await a distributed
-two-phase model (the framework's two-phase shock-tube heritage is the
-intended starting point); non-equilibrium and slip corrections to the
-HEM choke become relevant once facility hardware fixes the restriction
-geometry and data allow $C_d$ calibration; the tubing, injection
-line, and gauge carriers inside the 7-5/8\,in casing are not yet
-represented; and fluid-side transport properties are constants, to be
-revisited for transcritical operation.
+The deferred items are explicit. The distributed two-phase
+restriction has since been removed by the HEM extension of
+\cref{sec:hem2p}, verified to machine-precision conservation and
+validated against the ECCSEL depressurization data; what remains
+deferred moves one level up the model hierarchy: finite-rate phase
+change (HRM) to capture the metastable undershoot measured near a
+full-bore exit; two-phase wall friction and heat-transfer closures
+(the present constants and single-phase correlations leave the
+validated late-time temperatures running cold); phase slip in the
+low-rate tail of a blowdown, where condensate fallback is expected;
+and vapor--liquid--solid thermodynamics for states approaching the
+sublimation region, at which the present model halts flagged.
+Non-equilibrium and slip corrections to the HEM \emph{choke} become
+relevant once facility hardware fixes the restriction geometry and
+data allow $C_d$ calibration; the tubing, injection line, and gauge
+carriers inside the 7-5/8\,in casing are not yet represented.
 
 \section*{Code and data availability}
 \label{sec:code}
